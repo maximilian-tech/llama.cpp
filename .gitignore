@@ -133,3 +133,5 @@ poetry.toml
 
 # Test models for lora adapters
 /lora-tests
+
+/Meta-Llama-3.1-70B
