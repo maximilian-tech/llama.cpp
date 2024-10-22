@@ -4392,6 +4392,7 @@ struct llama_model_loader {
         llama_tensor_weight(const llama_file * file, uint16_t idx, const char * name, const struct gguf_context * gguf_ctx, ggml_tensor * tensor) : idx(idx), tensor(tensor) {
             const int tensor_idx = gguf_find_tensor(gguf_ctx, name);
             offs = gguf_get_data_offset(gguf_ctx) + gguf_get_tensor_offset(gguf_ctx, tensor_idx);
+            printf("reading tensor(%d,%llu) s=%llu, fsize=%llu\n", tensor_idx, ggml_nbytes(tensor), offs, file->size);fflush(stdout);
 
             if (offs + ggml_nbytes(tensor) < offs || offs + ggml_nbytes(tensor) > file->size) {
                 throw std::runtime_error(format("tensor '%s' data is not within the file bounds, model is corrupted or incomplete", name));
@@ -4550,6 +4551,7 @@ struct llama_model_loader {
                 case GGML_TYPE_F32:     ftype = LLAMA_FTYPE_ALL_F32;        break;
                 case GGML_TYPE_F16:     ftype = LLAMA_FTYPE_MOSTLY_F16;     break;
                 case GGML_TYPE_BF16:    ftype = LLAMA_FTYPE_MOSTLY_BF16;    break;
+                case GGML_TYPE_ZFP:     ftype = LLAMA_FTYPE_MOSTLY_ZFP;     break;
                 case GGML_TYPE_Q4_0:    ftype = LLAMA_FTYPE_MOSTLY_Q4_0;    break;
                 case GGML_TYPE_Q4_1:    ftype = LLAMA_FTYPE_MOSTLY_Q4_1;    break;
                 case GGML_TYPE_Q5_0:    ftype = LLAMA_FTYPE_MOSTLY_Q5_0;    break;
@@ -5285,6 +5287,7 @@ static std::string llama_model_ftype_name(llama_ftype ftype) {
         case LLAMA_FTYPE_ALL_F32:         return "all F32";
         case LLAMA_FTYPE_MOSTLY_F16:      return "F16";
         case LLAMA_FTYPE_MOSTLY_BF16:     return "BF16";
+        case LLAMA_FTYPE_MOSTLY_ZFP:      return "ZFP";
         case LLAMA_FTYPE_MOSTLY_Q4_0:     return "Q4_0";
         case LLAMA_FTYPE_MOSTLY_Q4_1:     return "Q4_1";
         case LLAMA_FTYPE_MOSTLY_Q5_0:     return "Q5_0";
@@ -9050,6 +9053,7 @@ static int llama_model_load(const std::string & fname, llama_model & model, llam
                 model.ftype == LLAMA_FTYPE_ALL_F32 ||
                 model.ftype == LLAMA_FTYPE_MOSTLY_F16 ||
                 model.ftype == LLAMA_FTYPE_MOSTLY_BF16 ||
+                model.ftype == LLAMA_FTYPE_MOSTLY_ZFP ||
                 model.ftype == LLAMA_FTYPE_MOSTLY_Q4_0 ||
                 model.ftype == LLAMA_FTYPE_MOSTLY_Q4_1
             )
@@ -17977,7 +17981,7 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
                      ftype == LLAMA_FTYPE_MOSTLY_IQ1_M) {
                 new_type = GGML_TYPE_Q5_K;
             }
-            else if (new_type != GGML_TYPE_Q8_0) {
+            else if (new_type != GGML_TYPE_Q8_0 && new_type != GGML_TYPE_ZFP/*TODO: no clue but prevent some shit for now*/) {
                 new_type = GGML_TYPE_Q6_K;
             }
         }
@@ -18294,6 +18298,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         case LLAMA_FTYPE_MOSTLY_Q8_0: default_type = GGML_TYPE_Q8_0; break;
         case LLAMA_FTYPE_MOSTLY_F16:  default_type = GGML_TYPE_F16;  break;
         case LLAMA_FTYPE_MOSTLY_BF16: default_type = GGML_TYPE_BF16; break;
+        case LLAMA_FTYPE_MOSTLY_ZFP:  default_type = GGML_TYPE_ZFP;  break;
         case LLAMA_FTYPE_ALL_F32:     default_type = GGML_TYPE_F32;  break;
 
         // K-quants
@@ -18656,7 +18661,10 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             fflush(stdout);
 
             if (work.size() < (size_t)nelements * 4) {
-                work.resize(nelements * 4); // upper bound on size
+                if (GGML_TYPE_ZFP == new_type)
+                    work.resize(std::max(nelements * sizeof(float), tensor->ne[1] * ggml_row_size(new_type, tensor->ne[0])));
+                else
+                    work.resize(nelements * 4); // upper bound on size
             }
             new_data = work.data();
 
@@ -18679,6 +18687,15 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 const float * imatrix_03 = imatrix ? imatrix + i03 * n_per_row : nullptr;
 
                 new_size += llama_tensor_quantize_internal(new_type, f32_data_03, new_data_03, chunk_size, nrows, n_per_row, imatrix_03, workers, nthread_use);
+                /*TODO just debugging*/if (GGML_TYPE_ZFP == new_type){ // && ZFPRATE < 0) {
+                    const ggml_type_traits * qtype = ggml_get_type_traits(new_type);
+                    float *vali_array = (float*)malloc(nelements_matrix*sizeof(float));
+                    printf("befor dequan\n");fflush(stdout);
+                    qtype->to_float(new_data_03, vali_array, nelements_matrix);
+                    for(int i=0; i<10; i++) {
+                        printf("%f %f\n", f32_data[i],vali_array[i]);fflush(stdout);
+                    }
+                }
             }
             LLAMA_LOG_INFO("size = %8.2f MiB -> %8.2f MiB\n", ggml_nbytes(tensor)/1024.0/1024.0, new_size/1024.0/1024.0);
         }
@@ -18688,6 +18705,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         // update the gguf meta data as we go
         gguf_set_tensor_type(ctx_outs[cur_split], name.c_str(), new_type);
         gguf_set_tensor_data(ctx_outs[cur_split], name.c_str(), new_data, new_size);
+        printf("writing tensor (%d,%llu)\n",new_type,new_size);fflush(stdout);
 
         // write tensor data + padding
         fout.write((const char *) new_data, new_size);

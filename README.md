@@ -11,6 +11,7 @@ pip install -r requirements.txt
 ## zfp 1.0.1
 pushd zfp && rm -rf build && mkdir build
 pushd build && cmake .. -DBUILD_ZFORP=1 -DCMAKE_BUILD_TYPE=Release && make && popd
+#pushd build && cmake .. -DBUILD_ZFORP=1 -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS="-O0 -g" -DCMAKE_CXX_FLAGS="-O0 -g" && make && popd
 popd
 ## openblas v0.3.28
 pushd OpenBLAS && rm -rf build
@@ -24,12 +25,16 @@ popd
 ## https://github.com/ggerganov/llama.cpp/blob/b3901/docs/build.md
 export PKG_CONFIG_PATH="$(pwd)/OpenBLAS/build/lib/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}"
 rm -rf build/
+ZFP="-DZFPDIM=4 -DZFPRATE=-1.0 -I$(pwd)/zfp/include/ -L$(pwd)/zfp/build/lib64/ -Wl,-rpath=$(pwd)/zfp/build/lib64/ -lzfp"
+OPT="-O0 -g"    #""
+CBT="Debug"     #"Release"
 cmake -B build \
-  -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
+  -DCMAKE_BUILD_TYPE="${CBT}" -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
   -DGGML_GPROF=OFF -DGGML_NATIVE=ON -DGGML_LTO=ON \
-  -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBLA_PREFER_PKGCONFIG=ON
+  -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBLA_PREFER_PKGCONFIG=ON \
+  -DCMAKE_C_FLAGS="${OPT} ${ZFP}" -DCMAKE_CXX_FLAGS="${OPT} ${ZFP}"
 #  -DCMAKE_CUDA_COMPILER=$(find /usr/local/cuda/ -name nvcc) -DCMAKE_CUDA_FLAGS="-allow-unsupported-compiler -ccbin gcc-13"
-cmake --build build --config Release --parallel $(nproc)
+cmake --build build --config "${CBT}" --parallel $(nproc)
 ```
 
 # Download Llama-3-8B in BF16 safetensor format
@@ -39,6 +44,7 @@ huggingface-cli \
   --local-dir Meta-Llama-3-8B \
   --token <INSERT_YOUR_OWN>
 ```
+
 
 # Convert to gguf
 ```
@@ -56,7 +62,8 @@ for O in Q4_0 Q4_1 Q5_0 Q5_1 IQ2_M TQ1_0 TQ2_0 Q2_K IQ3_XXS IQ3_S IQ3_M Q3_K IQ3
   ./build/bin/llama-quantize "${GG}-${I}.gguf" "${GG}-${O}.gguf" ${O} $(nproc) \
     2>&1 | tee -a "${GG}.log"
 done
-### https://medium.com/@ingridwickstevens/quantization-of-llms-with-llama-cpp-9bbf59deda35 (search for 'Importance Matrix')
+## https://medium.com/@ingridwickstevens/quantization-of-llms-with-llama-cpp-9bbf59deda35 (search for 'Importance Matrix')
+## (ONLY use imatrix when absolutely needed even so more might be able to use it see ggml.c#L21908)
 #wget https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip -O "$(dirname ${GG})/wiki.train.raw.zip"
 #unzip -p "$(dirname ${GG})/wiki.train.raw.zip" wikitext-2-raw/wiki.train.raw > Meta-Llama-3.1-70B/wiki.train.raw
 #./build/bin/llama-imatrix -m "${GG}-${I}.gguf" -f "$(dirname ${GG})/wiki.train.raw" \
@@ -85,6 +92,14 @@ done
 ## overwrite traits https://github.com/ggerganov/llama.cpp/blob/b3901/ggml/src/ggml.c#L865
 ##  -> eg https://github.com/ggerganov/llama.cpp/blob/b3901/ggml/src/ggml-quants.c#L5518 but make sure it's called
 ##  ==> skip #if and go to naive impl https://github.com/ggerganov/llama.cpp/blob/b3901/ggml/src/ggml-quants.c#L5846
+```
+
+# Testing functionality
+```
+./build/bin/llama-cli \
+    --model "${GG}-${O}.gguf" \
+    --threads 1 --repeat_penalty 1.0 --prompt "Tell me a German joke. I've never heard one before." \
+    --predict 50 --seed 1 --verbose
 ```
 
 # Eval perplexity

@@ -18,6 +18,7 @@
 *.o
 *.so
 *.tmp
+*.swp
 
 # IDE / OS
 
@@ -30,6 +31,7 @@
 .swiftpm
 .vs/
 .vscode/
+.gdb_history
 nppBackup
 
 
@@ -136,3 +138,4 @@ poetry.toml
 
 /Meta-Llama-3.1-70B
 /Meta-Llama-3-8B
+

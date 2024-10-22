@@ -7,6 +7,7 @@
 #include "ggml-quants.h"
 #include "ggml.h"
 #include "ggml-aarch64.h"
+#include "zfp.h"
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #include <malloc.h> // using malloc.h with MSC/MINGW
@@ -1074,6 +1075,18 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
         .from_float_ref           = (ggml_from_float_t) ggml_fp32_to_bf16_row_ref,
         .vec_dot                  = (ggml_vec_dot_t) ggml_vec_dot_bf16,
         .vec_dot_type             = GGML_TYPE_BF16,
+        .nrows                    = 1,
+    },
+    [GGML_TYPE_ZFP] = {
+        .type_name                = "zfp",
+        .blck_size                = ZFPBLOCK,
+        .type_size                = sizeof(float), //????  zfp_stream_maximum_size(???, zfp_field_4d(NULL, zfp_type_float, 4, 4, 4, 4)),
+        .is_quantized             = true,
+        .to_float                 = (ggml_to_float_t) dequantize_row_zfp,
+        .from_float               = (ggml_from_float_t) quantize_row_zfp,
+        .from_float_ref           = (ggml_from_float_t) quantize_row_zfp_ref,
+        .vec_dot                  = (ggml_vec_dot_t) ggml_vec_dot_zfp_zfp,
+        .vec_dot_type             = GGML_TYPE_ZFP,
         .nrows                    = 1,
     },
     [GGML_TYPE_Q4_0_4_4] = {
@@ -3436,6 +3449,19 @@ int64_t ggml_nrows(const struct ggml_tensor * tensor) {
 size_t ggml_nbytes(const struct ggml_tensor * tensor) {
     size_t nbytes;
     size_t blck_size = ggml_blck_size(tensor->type);
+    if (GGML_TYPE_ZFP == tensor->type) {
+        const int64_t n_per_row = tensor->ne[0];
+        const int64_t nrows = tensor->ne[1];
+        //double rate = ZFPRATE;
+        zfp_field* field = ZFP_FIELD_UD(NULL, zfp_type_float, n_per_row);
+        zfp_stream* zfp = zfp_stream_open(NULL);
+        ZFP_STREAM_SET_COMPRESSION(zfp, field);  //double ret_rate = zfp_stream_set_rate(zfp, rate, zfp_field_type(field), zfp_field_dimensionality(field), zfp_false);
+        size_t bytes = zfp_stream_maximum_size(zfp, field);
+        zfp_field_free(field);
+        zfp_stream_close(zfp);
+        //return (ne*sizeof(float) < bytes) ? ne*sizeof(float) : bytes ;
+        return bytes * nrows;
+    }
     if (blck_size == 1) {
         nbytes = ggml_type_size(tensor->type);
         for (int i = 0; i < GGML_MAX_DIMS; ++i) {
@@ -3460,17 +3486,30 @@ int64_t ggml_blck_size(enum ggml_type type) {
     return type_traits[type].blck_size;
 }
 
-size_t ggml_type_size(enum ggml_type type) {
-    return type_traits[type].type_size;
-}
-
 size_t ggml_row_size(enum ggml_type type, int64_t ne) {
     assert(ne % ggml_blck_size(type) == 0);
+    if (GGML_TYPE_ZFP == type) {
+        //double rate = ZFPRATE;
+        zfp_field* field = ZFP_FIELD_UD(NULL, zfp_type_float, ne);
+        zfp_stream* zfp = zfp_stream_open(NULL);
+        ZFP_STREAM_SET_COMPRESSION(zfp, field);  //double ret_rate = zfp_stream_set_rate(zfp, rate, zfp_field_type(field), zfp_field_dimensionality(field), zfp_false);
+        size_t bytes = zfp_stream_maximum_size(zfp, field);
+        zfp_field_free(field);
+        zfp_stream_close(zfp);
+        //return (ne*sizeof(float) < bytes) ? ne*sizeof(float) : bytes ;
+        return bytes;
+    }
     return ggml_type_size(type)*ne/ggml_blck_size(type);
 }
 
+size_t ggml_type_size(enum ggml_type type) {
+    if (GGML_TYPE_ZFP == type)
+        return ggml_row_size(type, ZFPBLOCK);
+    return type_traits[type].type_size;
+}
+
 double ggml_type_sizef(enum ggml_type type) {
-    return ((double)(type_traits[type].type_size))/type_traits[type].blck_size;
+    return ((double)(ggml_type_size(type)))/ggml_blck_size(type);
 }
 
 const char * ggml_type_name(enum ggml_type type) {
@@ -3559,6 +3598,7 @@ enum ggml_type ggml_ftype_to_ggml_type(enum ggml_ftype ftype) {
         case GGML_FTYPE_ALL_F32:              wtype = GGML_TYPE_F32;   break;
         case GGML_FTYPE_MOSTLY_F16:           wtype = GGML_TYPE_F16;   break;
         case GGML_FTYPE_MOSTLY_BF16:          wtype = GGML_TYPE_BF16;  break;
+        case GGML_FTYPE_MOSTLY_ZFP:           wtype = GGML_TYPE_ZFP;   break;
         case GGML_FTYPE_MOSTLY_Q4_0:          wtype = GGML_TYPE_Q4_0;  break;
         case GGML_FTYPE_MOSTLY_Q4_1:          wtype = GGML_TYPE_Q4_1;  break;
         case GGML_FTYPE_MOSTLY_Q5_0:          wtype = GGML_TYPE_Q5_0;  break;
@@ -9498,6 +9538,8 @@ static void ggml_compute_forward_add(
                     GGML_ABORT("fatal error");
                 }
             } break;
+        case GGML_TYPE_ZFP:
+            //{ ggml_compute_forward_add_zfp_f32(params, dst); } break;
         case GGML_TYPE_Q4_0:
         case GGML_TYPE_Q4_1:
         case GGML_TYPE_Q5_0:
@@ -9877,6 +9919,8 @@ static void ggml_compute_forward_add1(
                     GGML_ABORT("fatal error");
                 }
             } break;
+        case GGML_TYPE_ZFP:
+            //{} break;
         case GGML_TYPE_Q4_0:
         case GGML_TYPE_Q4_1:
         case GGML_TYPE_Q5_0:
@@ -10005,6 +10049,7 @@ static void ggml_compute_forward_acc(
             {
                 ggml_compute_forward_acc_f32(params, dst);
             } break;
+        case GGML_TYPE_ZFP:
         case GGML_TYPE_F16:
         case GGML_TYPE_BF16:
         case GGML_TYPE_Q4_0:
@@ -13074,6 +13119,8 @@ static void ggml_compute_forward_out_prod(
     const struct ggml_tensor * src0 = dst->src[0];
 
     switch (src0->type) {
+        case GGML_TYPE_ZFP:
+            //{} break;
         case GGML_TYPE_Q4_0:
         case GGML_TYPE_Q4_1:
         case GGML_TYPE_Q5_0:
@@ -13261,6 +13308,7 @@ static void ggml_compute_forward_set(
             {
                 ggml_compute_forward_set_f32(params, dst);
             } break;
+        case GGML_TYPE_ZFP:
         case GGML_TYPE_F16:
         case GGML_TYPE_BF16:
         case GGML_TYPE_Q4_0:
@@ -13527,6 +13575,8 @@ static void ggml_compute_forward_get_rows(
     const struct ggml_tensor * src0 = dst->src[0];
 
     switch (src0->type) {
+        case GGML_TYPE_ZFP:
+            //{} break;
         case GGML_TYPE_Q4_0:
         case GGML_TYPE_Q4_1:
         case GGML_TYPE_Q5_0:
@@ -14116,6 +14166,7 @@ static void ggml_compute_forward_clamp(
             {
                 ggml_compute_forward_clamp_f32(params, dst);
             } break;
+        case GGML_TYPE_ZFP:
         case GGML_TYPE_F16:
         case GGML_TYPE_BF16:
         case GGML_TYPE_Q4_0:
@@ -21906,6 +21957,7 @@ size_t ggml_quantize_chunk(
     size_t result = 0;
 
     switch (type) {
+        case GGML_TYPE_ZFP:     result = quantize_zfp(src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
         case GGML_TYPE_Q4_0:    result = quantize_q4_0(src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
         case GGML_TYPE_Q4_1:    result = quantize_q4_1(src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
         case GGML_TYPE_Q5_0:    result = quantize_q5_0(src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
