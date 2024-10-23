@@ -3453,14 +3453,14 @@ size_t ggml_nbytes(const struct ggml_tensor * tensor) {
         const int64_t n_per_row = tensor->ne[0];
         const int64_t nrows = tensor->ne[1];
         //double rate = ZFPRATE;
-        zfp_field* field = ZFP_FIELD_UD(NULL, zfp_type_float, n_per_row);
+        zfp_field* field = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK); //, n_per_row);
         zfp_stream* zfp = zfp_stream_open(NULL);
         ZFP_STREAM_SET_COMPRESSION(zfp, field);  //double ret_rate = zfp_stream_set_rate(zfp, rate, zfp_field_type(field), zfp_field_dimensionality(field), zfp_false);
         size_t bytes = zfp_stream_maximum_size(zfp, field);
         zfp_field_free(field);
         zfp_stream_close(zfp);
         //return (ne*sizeof(float) < bytes) ? ne*sizeof(float) : bytes ;
-        return bytes * nrows;
+        return bytes * (nrows * n_per_row / ZFPBLOCK); //bytes * nrows;
     }
     if (blck_size == 1) {
         nbytes = ggml_type_size(tensor->type);
@@ -3490,14 +3490,15 @@ size_t ggml_row_size(enum ggml_type type, int64_t ne) {
     assert(ne % ggml_blck_size(type) == 0);
     if (GGML_TYPE_ZFP == type) {
         //double rate = ZFPRATE;
-        zfp_field* field = ZFP_FIELD_UD(NULL, zfp_type_float, ne);
+        zfp_field* field = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK); //, ne);
         zfp_stream* zfp = zfp_stream_open(NULL);
         ZFP_STREAM_SET_COMPRESSION(zfp, field);  //double ret_rate = zfp_stream_set_rate(zfp, rate, zfp_field_type(field), zfp_field_dimensionality(field), zfp_false);
         size_t bytes = zfp_stream_maximum_size(zfp, field);
         zfp_field_free(field);
         zfp_stream_close(zfp);
         //return (ne*sizeof(float) < bytes) ? ne*sizeof(float) : bytes ;
-        return bytes;
+        //if(ZFPDBG){printf("returning %llu (%llu,%llu,%llu)\n", bytes * (ne / ZFPBLOCK), (uint64)bytes, (uint64)ne, (uint64)ZFPBLOCK);fflush(stdout);}
+        return bytes * (ne / ZFPBLOCK); //bytes;
     }
     return ggml_type_size(type)*ne/ggml_blck_size(type);
 }
@@ -12471,6 +12472,7 @@ static void ggml_compute_forward_mul_mat_one_chunk(
 
                 for (int64_t ir0 = iir0; ir0 < iir0 + blck_0 && ir0 < ir0_end; ir0 += num_rows_per_vec_dot) {
                     vec_dot(ne00, &tmp[ir0 - iir0], (num_rows_per_vec_dot > 1 ? 16 : 0), src0_row + ir0 * nb01, (num_rows_per_vec_dot > 1 ? nb01 : 0), src1_col, (num_rows_per_vec_dot > 1 ? src1_col_stride : 0), num_rows_per_vec_dot);
+                    //printf("vec_dot res=%f\n",tmp[ir0 - iir0]);fflush(stdout);
                 }
 
                 for (int cn = 0; cn < num_rows_per_vec_dot; ++cn) {

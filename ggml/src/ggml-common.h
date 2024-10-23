@@ -160,22 +160,22 @@ typedef sycl::half2 ggml_half2;
     } while (0)
 
 #if   ZFPDIM == 1
-#define ZFPBLOCK 4
+#define ZFPBLOCK (4)
     #define ZFP_FIELD_UD(field_ptr, zfp_type, num_elem) zfp_field_1d(field_ptr, zfp_type, num_elem / (ZFPBLOCK/4))
     #define ZFP_ENCODE_BLOCK(...) zfp_encode_block_float_1(__VA_ARGS__)
     #define ZFP_DECODE_BLOCK(...) zfp_decode_block_float_1(__VA_ARGS__)
 #elif ZFPDIM == 2
-    #define ZFPBLOCK 4*4
+    #define ZFPBLOCK (4*4)
     #define ZFP_FIELD_UD(field_ptr, zfp_type, num_elem) zfp_field_2d(field_ptr, zfp_type, 4, num_elem / (ZFPBLOCK/4))
     #define ZFP_ENCODE_BLOCK(...) zfp_encode_block_float_2(__VA_ARGS__)
     #define ZFP_DECODE_BLOCK(...) zfp_decode_block_float_2(__VA_ARGS__)
 #elif ZFPDIM == 3
-    #define ZFPBLOCK 4*4*4
+    #define ZFPBLOCK (4*4*4)
     #define ZFP_FIELD_UD(field_ptr, zfp_type, num_elem) zfp_field_3d(field_ptr, zfp_type, 4, 4, num_elem / (ZFPBLOCK/4))
     #define ZFP_ENCODE_BLOCK(...) zfp_encode_block_float_3(__VA_ARGS__)
     #define ZFP_DECODE_BLOCK(...) zfp_decode_block_float_3(__VA_ARGS__)
 #elif ZFPDIM == 4
-    #define ZFPBLOCK 4*4*4*4
+    #define ZFPBLOCK (4*4*4*4)
     #define ZFP_FIELD_UD(field_ptr, zfp_type, num_elem) zfp_field_4d(field_ptr, zfp_type, 4, 4, 4, num_elem / (ZFPBLOCK/4))
     #define ZFP_ENCODE_BLOCK(...) zfp_encode_block_float_4(__VA_ARGS__)
     #define ZFP_DECODE_BLOCK(...) zfp_decode_block_float_4(__VA_ARGS__)

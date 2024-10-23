@@ -7,6 +7,9 @@
 #include "ggml.h"
 #include "ggml-alloc.h"
 #include "ggml-backend.h"
+#ifndef ZFPDBG
+    #define ZFPDBG 0
+#endif  //ZFPDBG
 
 #ifdef GGML_USE_RPC
 #  include "ggml-rpc.h"
@@ -4392,7 +4395,7 @@ struct llama_model_loader {
         llama_tensor_weight(const llama_file * file, uint16_t idx, const char * name, const struct gguf_context * gguf_ctx, ggml_tensor * tensor) : idx(idx), tensor(tensor) {
             const int tensor_idx = gguf_find_tensor(gguf_ctx, name);
             offs = gguf_get_data_offset(gguf_ctx) + gguf_get_tensor_offset(gguf_ctx, tensor_idx);
-            printf("reading tensor(%d,%llu) s=%llu, fsize=%llu\n", tensor_idx, ggml_nbytes(tensor), offs, file->size);fflush(stdout);
+            //printf("reading tensor(%d,%llu) s=%llu, fsize=%llu\n", tensor_idx, ggml_nbytes(tensor), offs, file->size);fflush(stdout);
 
             if (offs + ggml_nbytes(tensor) < offs || offs + ggml_nbytes(tensor) > file->size) {
                 throw std::runtime_error(format("tensor '%s' data is not within the file bounds, model is corrupted or incomplete", name));
@@ -18687,7 +18690,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 const float * imatrix_03 = imatrix ? imatrix + i03 * n_per_row : nullptr;
 
                 new_size += llama_tensor_quantize_internal(new_type, f32_data_03, new_data_03, chunk_size, nrows, n_per_row, imatrix_03, workers, nthread_use);
-                /*TODO just debugging*/if (GGML_TYPE_ZFP == new_type){ // && ZFPRATE < 0) {
+                /*TODO just debugging*/if (ZFPDBG && GGML_TYPE_ZFP == new_type){ // && ZFPRATE < 0) {
                     const ggml_type_traits * qtype = ggml_get_type_traits(new_type);
                     float *vali_array = (float*)malloc(nelements_matrix*sizeof(float));
                     printf("befor dequan\n");fflush(stdout);
