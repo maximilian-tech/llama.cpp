@@ -26,8 +26,8 @@ popd
 export PKG_CONFIG_PATH="$(pwd)/OpenBLAS/build/lib/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}"
 rm -rf build/
 ZFP="-DZFPDIM=4 -DZFPRATE=-1.0 -I$(pwd)/zfp/include/ -L$(pwd)/zfp/build/lib64/ -Wl,-rpath=$(pwd)/zfp/build/lib64/ -lzfp"
-OPT="-O0 -g"    #""
-CBT="Debug"     #"Release"
+OPT="-O1 -g -DZFPDBG=1"     #""
+CBT="Debug"                 #"Release"
 cmake -B build \
   -DCMAKE_BUILD_TYPE="${CBT}" -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
   -DGGML_GPROF=OFF -DGGML_NATIVE=ON -DGGML_LTO=ON \

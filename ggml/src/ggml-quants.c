@@ -3220,6 +3220,43 @@ void dequantize_row_zfp(const void * restrict src, float * restrict dst, int64_t
     dequantize_zfp_impl(src, dst, n);
 }
 
+void ggml_vec_dot_zfp_f32(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const float * restrict vy, size_t by, int nrc) {
+    //TODO:for nthread>1 we are in deep shit?! because llama_tensor_quantize_internal created more than one zfp stream
+    assert(nrc == 1);
+    UNUSED(nrc);
+    UNUSED(bs);
+    UNUSED(bx);
+    UNUSED(by);
+    if(ZFPDBG){assert(n % ZFPBLOCK == 0);}
+    *s = 0;return;
+
+    float sumf = 0.0, x[ZFPBLOCK], *y;
+    size_t skip_hdr_bits = 0;
+
+    zfp_field* fieldX = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK); //, n);
+    zfp_stream* zfpX = zfp_stream_open(NULL);ZFP_STREAM_SET_COMPRESSION(zfpX, fieldX);size_t bytesX = zfp_stream_maximum_size(zfpX, fieldX);//bitstream* streamX = stream_open(vx/*buffer*/, bytesX);zfp_stream_set_bit_stream(zfpX, streamX);
+
+    bitstream* streamX = stream_open(vx, bytesX);
+    /*maybe only read header at start*/zfp_stream_set_bit_stream(zfpX, streamX);if (!(skip_hdr_bits = zfp_read_header(zfpX, fieldX, ZFPHEADER))) {fprintf(stderr, "incorrect or missing header\n");assert(false);};
+    for (int64_t i = 0; i < n/ZFPBLOCK; ++i) {
+        stream_reset(streamX, vx+i*bytesX, bytesX);
+        zfp_stream_set_bit_stream(zfpX, streamX);
+        stream_skip(streamX, skip_hdr_bits);
+//        if (!zfp_read_header(zfpX, fieldX, ZFPHEADER)) {fprintf(stderr, "incorrect or missing header\n");assert(false);};
+        ZFP_DECODE_BLOCK(zfpX, x);
+        y = vy + i*ZFPBLOCK;
+        for (uint16_t j = 0; j < ZFPBLOCK; ++j)
+            sumf += x[j] * y[j];
+    }
+    stream_close(streamX);
+
+    zfp_field_free(fieldX);
+    zfp_stream_close(zfpX);
+
+    *s = sumf;
+}
+
+
 void ggml_vec_dot_zfp_zfp(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy, size_t by, int nrc) {
     //TODO:for nthread>1 we are in deep shit?! because llama_tensor_quantize_internal created more than one zfp stream
     assert(nrc == 1);
