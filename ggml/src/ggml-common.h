@@ -153,10 +153,17 @@ typedef sycl::half2 ggml_half2;
 #ifndef ZFPRATE
     #define ZFPRATE 4.0 // approx 4 bits/float
 #endif  //ZFPRATE
+/*XXX: ensure gguf has same ZFPDBG flag in read mode as it had in write mode */
 #define ZFPHEADER (ZFP_HEADER_MAGIC | ZFP_HEADER_MODE)
+#define ZFP_RW_HEADER(zfp, field, rw) /* read: rw==0 ; write: rw!=0 */         \
+    do { if      (ZFPDBG && rw  && !zfp_write_header(zfp, field, ZFPHEADER))   \
+                   { fprintf(stderr, "cannot write header\n"); assert(false); }\
+         else if (ZFPDBG && !rw && !zfp_read_header(zfp, field, ZFPHEADER))    \
+                   { fprintf(stderr, "cannot read header\n"); assert(false); } \
+    } while (0)
 #define ZFP_STREAM_SET_COMPRESSION(zfp, field)                                 \
-    do {    if (ZFPRATE < 0.0) { zfp_stream_set_reversible(zfp); }             \
-            else { __attribute__((unused)) double __ret = zfp_stream_set_rate(zfp, ZFPRATE, zfp_field_type(field), zfp_field_dimensionality(field), zfp_false); } \
+    do { if (ZFPRATE < 0.0) { zfp_stream_set_reversible(zfp); }                \
+         else { __attribute__((unused)) double __ret = zfp_stream_set_rate(zfp, ZFPRATE, zfp_field_type(field), zfp_field_dimensionality(field), zfp_false); }    \
     } while (0)
 
 #if   ZFPDIM == 1

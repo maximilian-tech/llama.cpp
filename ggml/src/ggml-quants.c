@@ -3125,10 +3125,7 @@ static void quantize_zfp_impl(const float * restrict src, void * restrict dst, i
     //void* buffer = (void*)malloc(bytes); //TODO: remove temp buffer and work with dst directly
 //    bitstream* stream = stream_open(dst/*buffer*/, bytes);
 //    zfp_stream_set_bit_stream(zfp, stream);
-//    if (!zfp_write_header(zfp, field, ZFPHEADER)) {    /* skip ZFP_HEADER_META of field because its limiting dim to 4096 */
-//        fprintf(stderr, "cannot write header\n");
-//        assert(false);
-//    }
+//    ZFP_RW_HEADER(zfp, field, 1);
 
     /* compress */
     //printf("%lu, %lu, %f, %ld\n", n, d, pow(4,d), n / (int64_t)pow(4,d));fflush(stdout);
@@ -3136,7 +3133,7 @@ static void quantize_zfp_impl(const float * restrict src, void * restrict dst, i
     for (int64_t i = 0; i < n/ZFPBLOCK; ++i) { //(int64_t)zfp_field_blocks(field)/*n / (int64_t)pow(4,d)*/; ++i) {
         stream_reset(stream, dst+i*bytes, bytes); //bitstream* stream = stream_open(dst+i*bytes /*buffer*/, bytes);
         zfp_stream_set_bit_stream(zfp, stream);
-        if (!zfp_write_header(zfp, field, ZFPHEADER)) {fprintf(stderr, "cannot write header\n");assert(false);}
+        ZFP_RW_HEADER(zfp, field, 1);
         ZFP_ENCODE_BLOCK(zfp, (const float*)(src + i * ZFPBLOCK)); //+ i * (int64_t)pow(4,ZFPDIM)));
         zfp_stream_flush(zfp);
         //stream_close(stream);
@@ -3148,9 +3145,9 @@ static void quantize_zfp_impl(const float * restrict src, void * restrict dst, i
     //memcpy((uint8_t *)dst + start * sizeof(ggml_bf16_t), buffer, stream_size(stream));
     if(ZFPDBG){
         float aa[ZFPBLOCK], zz[ZFPBLOCK];
-        bitstream* stream = stream_open(dst, bytes);if (!zfp_read_header(zfp, field, ZFPHEADER)) { fprintf(stderr, "cannot read header\n"); assert(false); }
+        bitstream* stream = stream_open(dst, bytes);ZFP_RW_HEADER(zfp, field, 0);
         ZFP_DECODE_BLOCK(zfp, aa);
-        stream_reset(stream, dst+(n/ZFPBLOCK-1)*bytes, bytes);/*stream = stream_open(dst+(n/ZFPBLOCK-1)*bytes, bytes);*/if (!zfp_read_header(zfp, field, ZFPHEADER)) { fprintf(stderr, "cannot read header\n"); assert(false); }
+        stream_reset(stream, dst+(n/ZFPBLOCK-1)*bytes, bytes);/*stream = stream_open(dst+(n/ZFPBLOCK-1)*bytes, bytes);*/ZFP_RW_HEADER(zfp, field, 0);
         ZFP_DECODE_BLOCK(zfp, zz);
         stream_close(stream);
         printf("compr: src[%f %f..%f ... %f %f..%f] dst[%f %f..%f ... %f %f..%f]\n",src[0],src[1],src[ZFPBLOCK-1],src[n-ZFPBLOCK+0],src[n-ZFPBLOCK+1],src[n-ZFPBLOCK+ZFPBLOCK-1],aa[0],aa[1],aa[ZFPBLOCK-1],zz[0],zz[1],zz[ZFPBLOCK-1]);fflush(stdout);
@@ -3169,10 +3166,7 @@ static void dequantize_zfp_impl(const void * restrict src, float * restrict dst,
     zfp_stream* zfp = zfp_stream_open(NULL);ZFP_STREAM_SET_COMPRESSION(zfp, field);size_t bytes = zfp_stream_maximum_size(zfp, field);//bitstream* stream = stream_open(src/*buffer*/, bytes);zfp_stream_set_bit_stream(zfp, stream);
 //    ZFP_STREAM_SET_COMPRESSION(zfp, field); //*double ret_rate = zfp_stream_set_rate(zfp, rate, zfp_field_type(field), zfp_field_dimensionality(field), zfp_false);
 //    zfp_stream_rewind(zfp);//TODO???needed???
-//    if (!zfp_read_header(zfp, field, ZFPHEADER)) {
-//        fprintf(stderr, "incorrect or missing header\n");
-//        assert(false);
-//    }
+//    ZFP_RW_HEADER(zfp, field, 0);
 //    zfp_field_set_pointer(field, dst);//TODO???needed???
 
     //TODO: what if != multiple of 256
@@ -3180,7 +3174,7 @@ static void dequantize_zfp_impl(const void * restrict src, float * restrict dst,
     for (int64_t i = 0; i < n/ZFPBLOCK; ++i) { //(int64_t)zfp_field_blocks(field)/*n / (int64_t)pow(4,d)*/; ++i) {
         stream_reset(stream, src+i*bytes, bytes); //bitstream* stream = stream_open(src+i*bytes /*buffer*/, bytes);
         zfp_stream_set_bit_stream(zfp, stream);
-        if (!zfp_read_header(zfp, field, ZFPHEADER)) {fprintf(stderr, "incorrect or missing header\n");assert(false);}
+        ZFP_RW_HEADER(zfp, field, 0);
         ZFP_DECODE_BLOCK(zfp, dst + i * ZFPBLOCK); //+ i * (int64_t)pow(4,ZFPDIM)));
         //stream_close(stream);
     }
@@ -3228,30 +3222,26 @@ void ggml_vec_dot_zfp_f32(int n, float * restrict s, size_t bs, const void * res
     UNUSED(bx);
     UNUSED(by);
     if(ZFPDBG){assert(n % ZFPBLOCK == 0);}
-    *s = 0;return;
 
     float sumf = 0.0, x[ZFPBLOCK], *y;
-    size_t skip_hdr_bits = 0;
 
-    zfp_field* fieldX = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK); //, n);
-    zfp_stream* zfpX = zfp_stream_open(NULL);ZFP_STREAM_SET_COMPRESSION(zfpX, fieldX);size_t bytesX = zfp_stream_maximum_size(zfpX, fieldX);//bitstream* streamX = stream_open(vx/*buffer*/, bytesX);zfp_stream_set_bit_stream(zfpX, streamX);
+    zfp_field* field = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK);
+    zfp_stream* zfp = zfp_stream_open(NULL);ZFP_STREAM_SET_COMPRESSION(zfp, field);size_t bytes = zfp_stream_maximum_size(zfp, field);
+    bitstream* stream = stream_open(vx, bytes);
 
-    bitstream* streamX = stream_open(vx, bytesX);
-    /*maybe only read header at start*/zfp_stream_set_bit_stream(zfpX, streamX);if (!(skip_hdr_bits = zfp_read_header(zfpX, fieldX, ZFPHEADER))) {fprintf(stderr, "incorrect or missing header\n");assert(false);};
     for (int64_t i = 0; i < n/ZFPBLOCK; ++i) {
-        stream_reset(streamX, vx+i*bytesX, bytesX);
-        zfp_stream_set_bit_stream(zfpX, streamX);
-        stream_skip(streamX, skip_hdr_bits);
-//        if (!zfp_read_header(zfpX, fieldX, ZFPHEADER)) {fprintf(stderr, "incorrect or missing header\n");assert(false);};
-        ZFP_DECODE_BLOCK(zfpX, x);
+        stream_reset(stream, vx+i*bytes, bytes);
+        zfp_stream_set_bit_stream(zfp, stream);
+        ZFP_RW_HEADER(zfp, field, 0);
+        ZFP_DECODE_BLOCK(zfp, x);
         y = vy + i*ZFPBLOCK;
         for (uint16_t j = 0; j < ZFPBLOCK; ++j)
             sumf += x[j] * y[j];
     }
-    stream_close(streamX);
 
-    zfp_field_free(fieldX);
-    zfp_stream_close(zfpX);
+    stream_close(stream);
+    zfp_field_free(field);
+    zfp_stream_close(zfp);
 
     *s = sumf;
 }
@@ -3273,16 +3263,15 @@ void ggml_vec_dot_zfp_zfp(int n, float * restrict s, size_t bs, const void * res
     zfp_field* fieldY = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK); //, n);
     zfp_stream* zfpY = zfp_stream_open(NULL);ZFP_STREAM_SET_COMPRESSION(zfpY, fieldY);size_t bytesY = zfp_stream_maximum_size(zfpY, fieldY);//bitstream* streamY = stream_open(vy/*buffer*/, bytesY);zfp_stream_set_bit_stream(zfpY, streamY);
 //    zfp_stream_rewind(zfpX);zfp_stream_rewind(zfpY);
-//    zfp_read_header(zfpX, fieldX, ZFPHEADER);zfp_read_header(zfpY, fieldY, ZFPHEADER);
- //   zfp_field_set_pointer(fieldX, x);zfp_field_set_pointer(fieldY, y);
+//    ZFP_RW_HEADER(zfpX, fieldX, 0);ZFP_RW_HEADER(zfpY, fieldY, 0);
+//    zfp_field_set_pointer(fieldX, x);zfp_field_set_pointer(fieldY, y);
 
 //    assert((int64_t)zfp_field_blocks(fieldX) == (int64_t)zfp_field_blocks(fieldY));
     bitstream* streamX = stream_open(vx, bytesX);bitstream* streamY = stream_open(vy, bytesY);
     for (int64_t i = 0; i < n/ZFPBLOCK; ++i) { //(int64_t)zfp_field_blocks(fieldX)/*n / (int64_t)pow(4,d)*/; ++i) {
         stream_reset(streamX, vx+i*bytesX, bytesX);stream_reset(streamY, vy+i*bytesY, bytesY);//bitstream* streamX = stream_open(vx+i*bytesX, bytesX);bitstream* streamY = stream_open(vy+i*bytesY, bytesY);
         zfp_stream_set_bit_stream(zfpX, streamX);zfp_stream_set_bit_stream(zfpY, streamY);
-        if (!zfp_read_header(zfpX, fieldX, ZFPHEADER)) {fprintf(stderr, "incorrect or missing header\n");assert(false);};
-        if (!zfp_read_header(zfpY, fieldY, ZFPHEADER)) {fprintf(stderr, "incorrect or missing header\n");assert(false);}
+        ZFP_RW_HEADER(zfpX, fieldX, 0);ZFP_RW_HEADER(zfpY, fieldY, 0);
         ZFP_DECODE_BLOCK(zfpX, x);ZFP_DECODE_BLOCK(zfpY, y);
         for (int64_t j = 0; j < ZFPBLOCK; ++j)
             sumf += x[j] * y[j];

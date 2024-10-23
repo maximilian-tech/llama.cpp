@@ -25,6 +25,7 @@ popd
 ## https://github.com/ggerganov/llama.cpp/blob/b3901/docs/build.md
 export PKG_CONFIG_PATH="$(pwd)/OpenBLAS/build/lib/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}"
 rm -rf build/
+#ZFPRATE<0 => perform reversible compression; >0 for chosen compresssion rate
 ZFP="-DZFPDIM=4 -DZFPRATE=-1.0 -I$(pwd)/zfp/include/ -L$(pwd)/zfp/build/lib64/ -Wl,-rpath=$(pwd)/zfp/build/lib64/ -lzfp"
 OPT="-O1 -g -DZFPDBG=1"     #""
 CBT="Debug"                 #"Release"
@@ -55,6 +56,7 @@ python3 ./convert_hf_to_gguf.py Meta-Llama-3-8B \
 
 # Quantize model
 ```
+## https://huggingface.co/docs/hub/en/gguf#quantization-types
 ## https://medium.com/@qdrddr/the-easiest-way-to-convert-a-model-to-gguf-and-quantize-91016e97c987
 GG="Meta-Llama-3-8B/Meta-Llama-3-8B"
 I="F32"
@@ -76,6 +78,7 @@ for O in IQ1_S IQ1_M IQ2_S IQ2_XXS IQ2_XS Q2_K_S; do
     "${GG}-${I}.gguf" "${GG}-${O}.gguf" ${O} $(nproc) \
     2>&1 | tee -a "${GG}.log"
 done
+## logs show problems with downloaded imatrix -> try again to generate!?
 ```
 
 # Patch quantizer to add zfp
@@ -128,6 +131,12 @@ done
 ## 1) big prefill (1k+ words) + 1 output word
 ## 2) token split in 80% prefill + 20% prediction
 ## 3) small prefill/question + predicting hundred of words
+```
+
+# related work
+```
+## is SZx faster??? https://arxiv.org/pdf/2201.13020
+## competing compressors https://sdrbench.github.io/
 ```
 
 # old readme
