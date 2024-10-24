@@ -27,14 +27,14 @@ export PKG_CONFIG_PATH="$(pwd)/OpenBLAS/build/lib/pkgconfig${PKG_CONFIG_PATH:+:$
 rm -rf build/
 #ZFPRATE<0 => perform reversible compression; >0 for chosen compresssion rate
 ZFP="-DZFPDIM=4 -DZFPRATE=-1.0 -I$(pwd)/zfp/include/ -L$(pwd)/zfp/build/lib64/ -Wl,-rpath=$(pwd)/zfp/build/lib64/ -lzfp"
-OPT="-O1 -g -DZFPDBG=1"     #""
-CBT="Debug"                 #"Release"
+OPT="-O1 -g -DZFPDBG=1" #""
+CBT="Debug"             #"Release"
 cmake -B build \
   -DCMAKE_BUILD_TYPE="${CBT}" -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
   -DGGML_GPROF=OFF -DGGML_NATIVE=ON -DGGML_LTO=ON \
   -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBLA_PREFER_PKGCONFIG=ON \
-  -DCMAKE_C_FLAGS="${OPT} ${ZFP}" -DCMAKE_CXX_FLAGS="${OPT} ${ZFP}"
-#  -DCMAKE_CUDA_COMPILER=$(find /usr/local/cuda/ -name nvcc) -DCMAKE_CUDA_FLAGS="-allow-unsupported-compiler -ccbin gcc-13"
+  -DCMAKE_C_FLAGS="${OPT} ${ZFP}" -DCMAKE_CXX_FLAGS="${OPT} ${ZFP}" \
+#  -DGGML_CUDA=ON -DCMAKE_CUDA_COMPILER=$(find /usr/local/cuda/ -name nvcc) -DCMAKE_CUDA_FLAGS="${OPT} ${ZFP} -allow-unsupported-compiler -ccbin gcc-13"
 cmake --build build --config "${CBT}" --parallel $(nproc)
 ```
 
@@ -54,31 +54,31 @@ python3 ./convert_hf_to_gguf.py Meta-Llama-3-8B \
   --outfile Meta-Llama-3-8B/Meta-Llama-3-8B-F32.gguf --outtype f32
 ```
 
+# Create Importance Matrix (for some quantizations below)
+```
+## https://medium.com/@ingridwickstevens/quantization-of-llms-with-llama-cpp-9bbf59deda35 (search for 'Importance Matrix')
+## (ONLY use imatrix when absolutely needed even so more might be able to use it see ggml.c#L21908)
+wget https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip -O "$(dirname ${GG})/wiki.train.raw.zip"
+unzip -p "$(dirname ${GG})/wiki.train.raw.zip" wikitext-2-raw/wiki.train.raw > "$(dirname ${GG})/wiki.train.raw"
+## skip -ngl 300 if no gpu support or reduce layers if not enough mem (on A100 <2h)
+./build/bin/llama-imatrix -m "${GG}-${I}.gguf" -f "$(dirname ${GG})/wiki.train.raw" \
+  -o "${GG}-imatrix.dat" -t $(nproc) -ngl 300 \
+  2>&1 | tee -a "${GG}.log"
+### https://github.com/ggerganov/llama.cpp/blob/b3901/examples/perplexity/README.md#llama-3-8b-scoreboard (getting imatrix from there?!; llama-quantize logs show problems with downloaded imatrix -> try again to generate!?)
+#wget https://huggingface.co/JohannesGaessler/llama.cpp_importance_matrices/resolve/main/imatrix-llama_3-8b-f16-10m_tokens.dat -O "${GG}-imatrix.dat"
+```
+
 # Quantize model
 ```
 ## https://huggingface.co/docs/hub/en/gguf#quantization-types
 ## https://medium.com/@qdrddr/the-easiest-way-to-convert-a-model-to-gguf-and-quantize-91016e97c987
 GG="Meta-Llama-3-8B/Meta-Llama-3-8B"
 I="F32"
-for O in Q4_0 Q4_1 Q5_0 Q5_1 IQ2_M TQ1_0 TQ2_0 Q2_K IQ3_XXS IQ3_S IQ3_M Q3_K IQ3_XS Q3_K_S Q3_K_M Q3_K_L IQ4_NL IQ4_XS Q4_K Q4_K_S Q4_K_M Q5_K Q5_K_S Q5_K_M Q6_K Q8_0 Q4_0_4_4 Q4_0_4_8 Q4_0_8_8 F16 BF16; do
-  ./build/bin/llama-quantize "${GG}-${I}.gguf" "${GG}-${O}.gguf" ${O} $(nproc) \
+for O in Q4_0 Q4_1 Q5_0 Q5_1 IQ2_M TQ1_0 TQ2_0 Q2_K IQ3_XXS IQ3_S IQ3_M Q3_K IQ3_XS Q3_K_S Q3_K_M Q3_K_L IQ4_NL IQ4_XS Q4_K Q4_K_S Q4_K_M Q5_K Q5_K_S Q5_K_M Q6_K Q8_0 Q4_0_4_4 Q4_0_4_8 Q4_0_8_8 F16 BF16 IQ1_S IQ1_M IQ2_S IQ2_XXS IQ2_XS Q2_K_S; do
+  rm -f "${GG}-${O}.gguf"
+  ./build/bin/llama-quantize --imatrix "${GG}-imatrix.dat" "${GG}-${I}.gguf" "${GG}-${O}.gguf" ${O} $(nproc) \
     2>&1 | tee -a "${GG}.log"
 done
-## https://medium.com/@ingridwickstevens/quantization-of-llms-with-llama-cpp-9bbf59deda35 (search for 'Importance Matrix')
-## (ONLY use imatrix when absolutely needed even so more might be able to use it see ggml.c#L21908)
-#wget https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip -O "$(dirname ${GG})/wiki.train.raw.zip"
-#unzip -p "$(dirname ${GG})/wiki.train.raw.zip" wikitext-2-raw/wiki.train.raw > Meta-Llama-3.1-70B/wiki.train.raw
-#./build/bin/llama-imatrix -m "${GG}-${I}.gguf" -f "$(dirname ${GG})/wiki.train.raw" \
-#  -o "${GG}-imatrix.dat" -t $(nproc) \
-#  2>&1 | tee -a "${GG}.log"
-## https://github.com/ggerganov/llama.cpp/blob/b3901/examples/perplexity/README.md#llama-3-8b-scoreboard
-wget https://huggingface.co/JohannesGaessler/llama.cpp_importance_matrices/resolve/main/imatrix-llama_3-8b-f16-10m_tokens.dat -O "${GG}-imatrix.dat"
-for O in IQ1_S IQ1_M IQ2_S IQ2_XXS IQ2_XS Q2_K_S; do
-  ./build/bin/llama-quantize --imatrix "${GG}-imatrix.dat" \
-    "${GG}-${I}.gguf" "${GG}-${O}.gguf" ${O} $(nproc) \
-    2>&1 | tee -a "${GG}.log"
-done
-## logs show problems with downloaded imatrix -> try again to generate!?
 ```
 
 # Patch quantizer to add zfp
@@ -88,6 +88,9 @@ done
 ##  -> https://github.com/ggerganov/llama.cpp/blob/b3901/ggml/src/ggml.c#L21884
 ##  ==> add code to: https://github.com/ggerganov/llama.cpp/blob/b3901/ggml/src/ggml.c#L21908
 ##      (suggest overwriting quantize_q8_0 or ggml_fp32_to_fp16_row (line L21936) if that makes inference code easy (no use of Kompute!?))
+##
+## see status:
+git diff b3901..HEAD
 ```
 
 # Patch inference ops (make sure its thread-safe for production version)
@@ -105,6 +108,24 @@ done
     --predict 50 --seed 1 --verbose
 ```
 
+# Build and quantize zfp versions (as long as dim/rate for zfp are static we need multiple builds)
+```
+GG="Meta-Llama-3-8B/Meta-Llama-3-8B"
+I="F32"; O="ZFP"
+for ZFPDIM in 4 3 2 1; do
+  for ZFPRATE in -1.0 16.0 12.0 8.0 7.0 6.0 5.0 4.0 3.0 2.0 1.0 0.5; do
+    rm -f "${GG}-${O}_${ZFPDIM}_${ZFPRATE}.gguf"
+    rm -rf "build_${ZFPDIM}_${ZFPRATE}"
+    OPT=""; CBT="Release";
+    ZFP="-DZFPDIM=${ZFPDIM} -DZFPRATE=${ZFPRATE} -I$(pwd)/zfp/include/ -L$(pwd)/zfp/build/lib64/ -Wl,-rpath=$(pwd)/zfp/build/lib64/ -lzfp"
+    cmake -B "build_${ZFPDIM}_${ZFPRATE}" -DCMAKE_BUILD_TYPE="${CBT}" -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DGGML_GPROF=OFF -DGGML_NATIVE=ON -DGGML_LTO=ON \
+      -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBLA_PREFER_PKGCONFIG=ON -DCMAKE_C_FLAGS="${OPT} ${ZFP}" -DCMAKE_CXX_FLAGS="${OPT} ${ZFP}"
+    cmake --build "build_${ZFPDIM}_${ZFPRATE}" --config "${CBT}" --parallel $(nproc)
+    ./build_${ZFPDIM}_${ZFPRATE}/bin/llama-quantize "${GG}-${I}.gguf" "${GG}-${O}_${ZFPDIM}_${ZFPRATE}.gguf" ${O} $(nproc) 2>&1 | tee -a "${GG}.zfp.log"
+  done
+done
+```
+
 # Eval perplexity
 ```
 ## https://ai.meta.com/blog/meta-llama-3-1/
@@ -118,6 +139,11 @@ done
 GG="Meta-Llama-3-8B/Meta-Llama-3-8B"
 for O in Q4_0 Q4_1 Q5_0 Q5_1 IQ2_M TQ1_0 TQ2_0 Q2_K IQ3_XXS IQ3_S IQ3_M Q3_K IQ3_XS Q3_K_S Q3_K_M Q3_K_L IQ4_NL IQ4_XS Q4_K Q4_K_S Q4_K_M Q5_K Q5_K_S Q5_K_M Q6_K Q8_0 Q4_0_4_4 Q4_0_4_8 Q4_0_8_8 F16 BF16 IQ1_S IQ1_M IQ2_S IQ2_XXS IQ2_XS Q2_K_S; do
   echo ${O} $(stat -c %s "${GG}-${O}.gguf")
+done
+for ZFPDIM in 4 3 2 1; do
+  for ZFPRATE in -1.0 16.0 12.0 8.0 7.0 6.0 5.0 4.0 3.0 2.0 1.0 0.5; do
+    O="ZFP"; echo ${O}_${ZFPDIM}_${ZFPRATE} $(stat -c %s "${GG}-${O}_${ZFPDIM}_${ZFPRATE}.gguf")
+  done
 done
 ```
 
