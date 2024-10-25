@@ -126,6 +126,22 @@ for ZFPDIM in 4 3 2 1; do
 done
 ```
 
+# Eval signal-to-noise or mean quare error (zfp vs fp32/input)
+```
+## compare in/out for llama_tensor_quantize_internal
+##  -> in:f32_data_03 out:new_data_03 at https://github.com/ggerganov/llama.cpp/blob/b3901/src/llama.cpp#L18681
+##  prototype:
+/*TODO just debugging*/if (ZFPDBG && GGML_TYPE_ZFP == new_type){ // && ZFPRATE < 0) {
+  const ggml_type_traits * qtype = ggml_get_type_traits(new_type);
+  float *vali_array = (float*)malloc(nelements_matrix*sizeof(float));
+  printf("befor dequan\n");fflush(stdout);
+  qtype->to_float(new_data_03, vali_array, nelements_matrix);
+  for(int i=0; i<10; i++) {
+      printf("%f %f\n", f32_data[i],vali_array[i]);fflush(stdout);
+  }
+}
+```
+
 # Eval perplexity
 ```
 ## https://ai.meta.com/blog/meta-llama-3-1/
