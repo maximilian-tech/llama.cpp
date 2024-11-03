@@ -3,7 +3,7 @@
 	url = https://github.com/nomic-ai/kompute.git
 [submodule "zfp"]
 	path = zfp
-	url = git@github.com:jdomke/zfp.git
+	url = git@github.com:maximilian-tech/zfp.git
 [submodule "OpenBLAS"]
 	path = OpenBLAS
 	url = https://github.com/OpenMathLib/OpenBLAS.git
