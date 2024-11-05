@@ -1,3 +1,26 @@
+## Goal
+Replace Quantization with Floating Point Compression
+
+## Current Problem
+Very, very slow (currently).
+Therefore work on performance
+
+## ToDo
+- [ ] Have working prototype according to Jens
+- [ ] Integrate HDF5 + OpenBLAS in Buildsystem
+- [ ] Check with Score-P and TopDown Plugin what is slow here
+- [ ] Maybe integrate HDF5 deeply:
+  - [ ] Use manual inlinining of the complete library
+  - [ ] Make it a static library and use LTO
+
+
+## Usefule comments
+- Threading: One can use threading, but has to create a common `zfp_stream`, which can then be use using multiple bitstreams. https://github.com/LLNL/zfp/blob/a46fa8b91bf2d69f4ffcf04af4f908383828ba79/src/share/parallel.c#L12
+- Non 4^d Chunks --> Use [partial blocks](https://zfp.readthedocs.io/en/release1.0.1/low-level-api.html#_CPPv4I0EN3zfp28encode_partial_block_stridedE6size_tP10zfp_streamPK6Scalar6size_t9ptrdiff_t)
+
+
+---
+
 # Cloning the repo
 ```
 # git checkout -b zfp tags/b3901

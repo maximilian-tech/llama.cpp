@@ -3112,16 +3112,21 @@ size_t quantize_q6_K(const float * restrict src, void * restrict dst, int64_t nr
     return nrow * row_size;
 }
 
-static void quantize_zfp_impl(const float * restrict src, void * restrict dst, int64_t n, const float * quant_weights) {
+static void
+quantize_zfp_impl( const float* restrict src,
+                   void* restrict        dst,
+                   int64_t               n,
+                   const float *         quant_weights )
+{
     UNUSED(quant_weights);
     if(ZFPDBG){assert(n % ZFPBLOCK == 0);}
 
     /* declare array to compress (TODO: what if != multiple of 256) */
-    zfp_field* field = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK); //, n); //, 4, 4, 4, n / (int64_t)pow(4,d-1));
+    zfp_field* field = ZFP_FIELD_UD( NULL, zfp_type_float, ZFPBLOCK ); //, n); //, 4, 4, 4, n / (int64_t)pow(4,d-1));
     /* allocate storage for compressed bit stream */
-    zfp_stream* zfp = zfp_stream_open(NULL);
-    ZFP_STREAM_SET_COMPRESSION(zfp, field); //double ret_rate = zfp_stream_set_rate(zfp, rate, zfp_field_type(field), zfp_field_dimensionality(field), zfp_false);
-    size_t bytes = zfp_stream_maximum_size(zfp, field);
+    zfp_stream* zfp = zfp_stream_open( NULL );
+    ZFP_STREAM_SET_COMPRESSION( zfp, field ); //double ret_rate = zfp_stream_set_rate(zfp, rate, zfp_field_type(field), zfp_field_dimensionality(field), zfp_false);
+    size_t bytes    = zfp_stream_maximum_size( zfp, field );
     //void* buffer = (void*)malloc(bytes); //TODO: remove temp buffer and work with dst directly
 //    bitstream* stream = stream_open(dst/*buffer*/, bytes);
 //    zfp_stream_set_bit_stream(zfp, stream);
@@ -3129,13 +3134,16 @@ static void quantize_zfp_impl(const float * restrict src, void * restrict dst, i
 
     /* compress */
     //printf("%lu, %lu, %f, %ld\n", n, d, pow(4,d), n / (int64_t)pow(4,d));fflush(stdout);
-    bitstream* stream = stream_open(dst, bytes);
-    for (int64_t i = 0; i < n/ZFPBLOCK; ++i) { //(int64_t)zfp_field_blocks(field)/*n / (int64_t)pow(4,d)*/; ++i) {
-        stream_reset(stream, dst+i*bytes, bytes); //bitstream* stream = stream_open(dst+i*bytes /*buffer*/, bytes);
-        zfp_stream_set_bit_stream(zfp, stream);
-        ZFP_RW_HEADER(zfp, field, 1);
-        ZFP_ENCODE_BLOCK(zfp, (const float*)(src + i * ZFPBLOCK)); //+ i * (int64_t)pow(4,ZFPDIM)));
-        zfp_stream_flush(zfp);
+    bitstream* stream = stream_open( dst, bytes );
+    for ( int64_t i = 0; i < n/ZFPBLOCK; ++i )
+    { //(int64_t)zfp_field_blocks(field)/*n / (int64_t)pow(4,d)*/; ++i) {
+    
+        stream_reset( stream, dst+i*bytes, bytes ); //bitstream* stream = stream_open(dst+i*bytes /*buffer*/, bytes);
+        zfp_stream_set_bit_stream( zfp, stream );
+        ZFP_RW_HEADER( zfp, field, 1 );
+        ZFP_ENCODE_BLOCK( zfp, ( const float* )( src + i * ZFPBLOCK ) ); //+ i * (int64_t)pow(4,ZFPDIM)));
+        zfp_stream_flush( zfp );
+
         //stream_close(stream);
     }
     stream_close(stream);
@@ -3160,24 +3168,34 @@ static void quantize_zfp_impl(const float * restrict src, void * restrict dst, i
     //free(buffer);
 }
 
-static void dequantize_zfp_impl(const void * restrict src, float * restrict dst, int64_t n) {
+static void
+dequantize_zfp_impl( const void * restrict src,
+                     float * restrict      dst,
+                     int64_t               n )
+{
     if(ZFPDBG){assert(n % ZFPBLOCK == 0);}
+    
+    
     zfp_field* field = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK); //, n); //, 4, 4, 4, n / (int64_t)pow(4,d-1));
-    zfp_stream* zfp = zfp_stream_open(NULL);ZFP_STREAM_SET_COMPRESSION(zfp, field);size_t bytes = zfp_stream_maximum_size(zfp, field);//bitstream* stream = stream_open(src/*buffer*/, bytes);zfp_stream_set_bit_stream(zfp, stream);
+    zfp_stream* zfp = zfp_stream_open(NULL);
+    ZFP_STREAM_SET_COMPRESSION(zfp, field);
+    size_t bytes = zfp_stream_maximum_size(zfp, field);//bitstream* stream = stream_open(src/*buffer*/, bytes);zfp_stream_set_bit_stream(zfp, stream);
 //    ZFP_STREAM_SET_COMPRESSION(zfp, field); //*double ret_rate = zfp_stream_set_rate(zfp, rate, zfp_field_type(field), zfp_field_dimensionality(field), zfp_false);
 //    zfp_stream_rewind(zfp);//TODO???needed???
 //    ZFP_RW_HEADER(zfp, field, 0);
 //    zfp_field_set_pointer(field, dst);//TODO???needed???
 
-    //TODO: what if != multiple of 256
+    //TODO: what if != multiple of 256 -->  Partial  BLOCK
     bitstream* stream = stream_open(src, bytes);
-    for (int64_t i = 0; i < n/ZFPBLOCK; ++i) { //(int64_t)zfp_field_blocks(field)/*n / (int64_t)pow(4,d)*/; ++i) {
-        stream_reset(stream, src+i*bytes, bytes); //bitstream* stream = stream_open(src+i*bytes /*buffer*/, bytes);
-        zfp_stream_set_bit_stream(zfp, stream);
-        ZFP_RW_HEADER(zfp, field, 0);
-        ZFP_DECODE_BLOCK(zfp, dst + i * ZFPBLOCK); //+ i * (int64_t)pow(4,ZFPDIM)));
+    for ( int64_t i = 0; i < n/ZFPBLOCK; ++i )
+    { //(int64_t)zfp_field_blocks(field)/*n / (int64_t)pow(4,d)*/; ++i) {
+        stream_reset( stream, src+i*bytes, bytes ); //bitstream* stream = stream_open(src+i*bytes /*buffer*/, bytes);
+        zfp_stream_set_bit_stream( zfp, stream );
+        ZFP_RW_HEADER( zfp, field, 0 );
+        ZFP_DECODE_BLOCK( zfp, dst + i * ZFPBLOCK ); //+ i * (int64_t)pow(4,ZFPDIM)));
         //stream_close(stream);
     }
+    
     stream_close(stream);
     if(ZFPDBG){printf("decompr dst[%f %f %f]\n",dst[0],dst[1],dst[ZFPBLOCK-1]);fflush(stdout);}
 
@@ -3187,34 +3205,59 @@ static void dequantize_zfp_impl(const void * restrict src, float * restrict dst,
 //    stream_close(stream);
 }
 
-void quantize_row_zfp_ref(const float * restrict src, void * restrict dst, int64_t n_per_row) {
-    quantize_zfp_impl(src, dst, n_per_row, NULL);
+void quantize_row_zfp_ref( const float * restrict src,
+                           void * restrict        dst,
+                           int64_t                n_per_row)
+{
+    quantize_zfp_impl( src, dst, n_per_row, NULL );
 }
 
-void quantize_row_zfp(const float * restrict src, void * restrict dst, int64_t n_per_row) {
-    quantize_row_zfp_ref(src, dst, n_per_row);
+void quantize_row_zfp( const float * restrict src,
+                       void * restrict        dst,
+                       int64_t                n_per_row )
+{
+    quantize_row_zfp_ref( src, dst, n_per_row );
 }
 
-size_t quantize_zfp(const float * restrict src, void * restrict dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
-    if (!quant_weights) {
-        quantize_row_zfp_ref(src, dst, (int64_t)nrow*n_per_row);
-        return nrow * ggml_row_size(GGML_TYPE_ZFP, n_per_row);
+size_t quantize_zfp( const float * restrict src,
+                     void * restrict        dst,
+                     int64_t                nrow,
+                     int64_t                n_per_row,
+                     const float *          quant_weights)
+{
+    if ( !quant_weights )
+    {
+        quantize_row_zfp_ref( src, dst, ( int64_t )nrow*n_per_row );
+        return nrow * ggml_row_size( GGML_TYPE_ZFP, n_per_row );
     }
-    size_t row_size = ggml_row_size(GGML_TYPE_ZFP, n_per_row);
-    char * qrow = (char *)dst;
-    for (int64_t row = 0; row < nrow; ++row) {
-        quantize_zfp_impl(src, qrow, n_per_row, quant_weights);
+    size_t row_size = ggml_row_size( GGML_TYPE_ZFP, n_per_row );
+    char * qrow = ( char * )dst;
+    for ( int64_t row = 0; row < nrow; ++row )
+    {
+        quantize_zfp_impl( src, qrow, n_per_row, quant_weights );
         src += n_per_row;
         qrow += row_size;
     }
     return nrow * row_size;
 }
 
-void dequantize_row_zfp(const void * restrict src, float * restrict dst, int64_t n) {
+void dequantize_row_zfp(const void * restrict src,
+                        float * restrict      dst,
+                        int64_t               n )
+{
     dequantize_zfp_impl(src, dst, n);
 }
 
-void ggml_vec_dot_zfp_f32(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const float * restrict vy, size_t by, int nrc) {
+void
+ggml_vec_dot_zfp_f32(int                    n,
+                     float * restrict       s,
+                     size_t                 bs,
+                     const void * restrict  vx,
+                     size_t                 bx,
+                     const float * restrict vy,
+                     size_t                 by,
+                     int                    nrc )
+{
     //TODO:for nthread>1 we are in deep shit?! because llama_tensor_quantize_internal created more than one zfp stream
     assert(nrc == 1);
     UNUSED(nrc);
@@ -3225,11 +3268,13 @@ void ggml_vec_dot_zfp_f32(int n, float * restrict s, size_t bs, const void * res
 
     float sumf = 0.0, x[ZFPBLOCK], *y;
 
-    zfp_field* field = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK);
-    zfp_stream* zfp = zfp_stream_open(NULL);ZFP_STREAM_SET_COMPRESSION(zfp, field);size_t bytes = zfp_stream_maximum_size(zfp, field);
+    zfp_field* field  = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK);
+    zfp_stream* zfp   = zfp_stream_open(NULL);ZFP_STREAM_SET_COMPRESSION(zfp, field);
+    size_t bytes      = zfp_stream_maximum_size(zfp, field);
     bitstream* stream = stream_open(vx, bytes);
 
-    for (int64_t i = 0; i < n/ZFPBLOCK; ++i) {
+    for (int64_t i = 0; i < n/ZFPBLOCK; ++i)
+    {
         stream_reset(stream, vx+i*bytes, bytes);
         zfp_stream_set_bit_stream(zfp, stream);
         ZFP_RW_HEADER(zfp, field, 0);
@@ -3247,7 +3292,15 @@ void ggml_vec_dot_zfp_f32(int n, float * restrict s, size_t bs, const void * res
 }
 
 
-void ggml_vec_dot_zfp_zfp(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy, size_t by, int nrc) {
+void
+ggml_vec_dot_zfp_zfp( int                   n,
+                      float * restrict      s,
+                      size_t                bs,
+                      const void * restrict vx,
+                      size_t                bx,
+                      const void * restrict vy,
+                      size_t                by,
+                      int nrc) {
     //TODO:for nthread>1 we are in deep shit?! because llama_tensor_quantize_internal created more than one zfp stream
     assert(nrc == 1);
     UNUSED(nrc);
@@ -3259,28 +3312,43 @@ void ggml_vec_dot_zfp_zfp(int n, float * restrict s, size_t bs, const void * res
     float sumf = 0.0, x[ZFPBLOCK], y[ZFPBLOCK];
 
     zfp_field* fieldX = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK); //, n);
-    zfp_stream* zfpX = zfp_stream_open(NULL);ZFP_STREAM_SET_COMPRESSION(zfpX, fieldX);size_t bytesX = zfp_stream_maximum_size(zfpX, fieldX);//bitstream* streamX = stream_open(vx/*buffer*/, bytesX);zfp_stream_set_bit_stream(zfpX, streamX);
+    zfp_stream* zfpX  = zfp_stream_open(NULL);ZFP_STREAM_SET_COMPRESSION(zfpX, fieldX);
+    size_t bytesX     = zfp_stream_maximum_size(zfpX, fieldX);//bitstream* streamX = stream_open(vx/*buffer*/, bytesX);zfp_stream_set_bit_stream(zfpX, streamX);
     zfp_field* fieldY = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK); //, n);
-    zfp_stream* zfpY = zfp_stream_open(NULL);ZFP_STREAM_SET_COMPRESSION(zfpY, fieldY);size_t bytesY = zfp_stream_maximum_size(zfpY, fieldY);//bitstream* streamY = stream_open(vy/*buffer*/, bytesY);zfp_stream_set_bit_stream(zfpY, streamY);
+    zfp_stream* zfpY  = zfp_stream_open(NULL);ZFP_STREAM_SET_COMPRESSION(zfpY, fieldY);
+    size_t bytesY     = zfp_stream_maximum_size(zfpY, fieldY);//bitstream* streamY = stream_open(vy/*buffer*/, bytesY);zfp_stream_set_bit_stream(zfpY, streamY);
 //    zfp_stream_rewind(zfpX);zfp_stream_rewind(zfpY);
 //    ZFP_RW_HEADER(zfpX, fieldX, 0);ZFP_RW_HEADER(zfpY, fieldY, 0);
 //    zfp_field_set_pointer(fieldX, x);zfp_field_set_pointer(fieldY, y);
 
 //    assert((int64_t)zfp_field_blocks(fieldX) == (int64_t)zfp_field_blocks(fieldY));
-    bitstream* streamX = stream_open(vx, bytesX);bitstream* streamY = stream_open(vy, bytesY);
-    for (int64_t i = 0; i < n/ZFPBLOCK; ++i) { //(int64_t)zfp_field_blocks(fieldX)/*n / (int64_t)pow(4,d)*/; ++i) {
-        stream_reset(streamX, vx+i*bytesX, bytesX);stream_reset(streamY, vy+i*bytesY, bytesY);//bitstream* streamX = stream_open(vx+i*bytesX, bytesX);bitstream* streamY = stream_open(vy+i*bytesY, bytesY);
-        zfp_stream_set_bit_stream(zfpX, streamX);zfp_stream_set_bit_stream(zfpY, streamY);
-        ZFP_RW_HEADER(zfpX, fieldX, 0);ZFP_RW_HEADER(zfpY, fieldY, 0);
-        ZFP_DECODE_BLOCK(zfpX, x);ZFP_DECODE_BLOCK(zfpY, y);
+    bitstream* streamX = stream_open(vx, bytesX);
+    bitstream* streamY = stream_open(vy, bytesY);
+    
+    for (int64_t i = 0; i < n/ZFPBLOCK; ++i)
+    { //(int64_t)zfp_field_blocks(fieldX)/*n / (int64_t)pow(4,d)*/; ++i) {
+        stream_reset(streamX, vx+i*bytesX, bytesX);
+        stream_reset(streamY, vy+i*bytesY, bytesY);//bitstream* streamX = stream_open(vx+i*bytesX, bytesX);bitstream* streamY = stream_open(vy+i*bytesY, bytesY);
+        zfp_stream_set_bit_stream(zfpX, streamX);
+        zfp_stream_set_bit_stream(zfpY, streamY);
+        
+        ZFP_RW_HEADER(zfpX, fieldX, 0);
+        ZFP_RW_HEADER(zfpY, fieldY, 0);
+        ZFP_DECODE_BLOCK(zfpX, x);
+        ZFP_DECODE_BLOCK(zfpY, y);
+        
         for (int64_t j = 0; j < ZFPBLOCK; ++j)
             sumf += x[j] * y[j];
         //stream_close(streamX);stream_close(streamY);
     }
-    stream_close(streamX);stream_close(streamY);
+    stream_close(streamX);
+    stream_close(streamY);
 
-    zfp_field_free(fieldX);zfp_field_free(fieldY);
-    zfp_stream_close(zfpX);zfp_stream_close(zfpY);
+    zfp_field_free(fieldX);
+    zfp_field_free(fieldY);
+    
+    zfp_stream_close(zfpX);
+    zfp_stream_close(zfpY);
 //    stream_close(streamX);stream_close(streamY);
 
     *s = sumf;

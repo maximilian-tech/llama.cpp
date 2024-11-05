@@ -163,7 +163,11 @@ typedef sycl::half2 ggml_half2;
     } while (0)
 #define ZFP_STREAM_SET_COMPRESSION(zfp, field)                                 \
     do { if (ZFPRATE < 0.0) { zfp_stream_set_reversible(zfp); }                \
-         else { __attribute__((unused)) double __ret = zfp_stream_set_rate(zfp, ZFPRATE, zfp_field_type(field), zfp_field_dimensionality(field), zfp_false); }    \
+         else { __attribute__((unused)) double __ret = zfp_stream_set_rate(zfp, \
+                                                                           ZFPRATE, \
+                                                                           zfp_field_type(field), \
+                                                                           zfp_field_dimensionality(field), \
+                                                                           zfp_false); }    \
     } while (0)
 
 #if   ZFPDIM == 1
