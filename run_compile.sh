@@ -17,7 +17,7 @@ SCOREP_WRAPPER=OFF cmake \
 	-DGGML_AVX512_VBMI=True \
 	-DGGML_AVX512_VNNI=ON \
 	-DGGML_AVX512_BF16=ON \
-	-DGGML_ZFP=ON \
+	-DGGML_ZFP_ENABLE=ON \
 	-DBUILD_UTILITIES=OFF \
 	-DZFP_WITH_OPENMP=OFF \
 	-DCMAKE_C_FLAGS_RELEASE="  -O3 -DNDEBUG -march=native -flto=full -mprefer-vector-width=512 -g -gdwarf-4 -fno-omit-frame-pointer" \

@@ -83,6 +83,11 @@ set(GGML_SANITIZE_UNDEFINED ${LLAMA_SANITIZE_UNDEFINED})
 set(GGML_ALL_WARNINGS       ${LLAMA_ALL_WARNINGS})
 set(GGML_FATAL_WARNINGS     ${LLAMA_FATAL_WARNINGS})
 
+option(GGML_ZFP_ENABLE "Build GGML with ZFP compression support" ON)
+if(GGML_ZFP_ENABLE)
+    add_compile_definitions(-DGGML_ZFP)
+endif()
+
 # change the default for these ggml options
 if (NOT DEFINED GGML_LLAMAFILE)
     set(GGML_LLAMAFILE_DEFAULT ON)

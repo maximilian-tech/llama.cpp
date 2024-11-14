@@ -189,13 +189,13 @@ find_package(Threads REQUIRED)
 # build the library
 #
 
-option(GGML_ZFP "Build GGML with ZFP compression support" ON)
-if(GGML_ZFP)
+#option(GGML_ZFP_ENABLE "Build GGML with ZFP compression support" ON)
+if(GGML_ZFP_ENABLE)
     message(STATUS "Enable ZFP Compression Option")
     #set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+    #add_compile_definitions(GGML_ZFP)
     add_subdirectory(../zfp zfp)
     link_libraries(zfp::zfp)
-    add_compile_definitions(-DGGML_ZFP)
 endif()
 
 add_subdirectory(src)
