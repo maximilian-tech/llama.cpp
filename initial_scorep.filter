@@ -1,0 +1,188 @@
+# Initial filter file, starting point for further adaptation.
+#
+# Considerations:
+#  - check possible wildcard options
+#  - check selected functions for relevancy
+#    (w.r.t. your knowledge of the application)
+#
+# Generated with the following parameters:
+#  - A region has to use at least 0.009% of the estimated trace buffer.
+#  - A region has to have a time/visits value of less than 100 us.
+#  - A region has to have at least 1 visits.
+#  - A region that is of type USR.
+#
+# The file contains comments for each region providing additional information
+# regarding the respective region.
+# The entries are sorted by `maxbuffer`.
+# The common prefix for the files is:
+# '/data/horse/ws/s0872522-llm-zfp/llama.cpp/'
+#
+# Please refer to the Score-P user guide for more options on filtering.
+SCOREP_REGION_NAMES_BEGIN
+  EXCLUDE
+    # type=USR max_buf=10,304,947,101,696 visits=396,344,119,296, time=10472.37s ( 18.3%), time/visit=    0.03us
+    # name='uint2int_uint32'
+    # file='zfp/src/template/decode.c'
+    MANGLED uint2int_uint32
+
+    # type=USR max_buf=10,304,947,101,696 visits=396,344,119,296, time=10766.67s ( 18.8%), time/visit=    0.03us
+    # name='inv_lift_int32'
+    # file='zfp/src/template/decode.c'
+    MANGLED inv_lift_int32
+
+    # type=USR max_buf=   644,059,193,856 visits= 24,771,507,456, time=  667.09s (  1.2%), time/visit=    0.03us
+    # name='stream_read_word'
+    # file='zfp/include/zfp/bitstream.inl'
+    MANGLED stream_read_word
+
+    # type=USR max_buf=    42,318,545,282 visits=  1,627,636,357, time=   46.13s (  0.1%), time/visit=    0.03us
+    # name='stream_rewind'
+    # file='zfp/include/zfp/bitstream.inl'
+    MANGLED stream_rewind
+
+    # type=USR max_buf=    40,253,699,616 visits=  1,548,219,216, time=   58.05s (  0.1%), time/visit=    0.04us
+    # name='zfp_stream_set_bit_stream'
+    # file='zfp/src/zfp.c'
+    MANGLED zfp_stream_set_bit_stream
+
+    # type=USR max_buf=    40,253,699,616 visits=  1,548,219,216, time=  139.86s (  0.2%), time/visit=    0.09us
+    # name='stream_reset'
+    # file='zfp/include/zfp/bitstream.inl'
+    MANGLED stream_reset
+
+    # type=USR max_buf=    40,253,699,616 visits=  1,548,219,216, time=  117.23s (  0.2%), time/visit=    0.08us
+    # name='inv_cast_float'
+    # file='zfp/src/template/codecf.c'
+    MANGLED inv_cast_float
+
+    # type=USR max_buf=    40,253,699,616 visits=  1,548,219,216, time=   50.70s (  0.1%), time/visit=    0.03us
+    # name='dequantize_float'
+    # file='zfp/src/template/codecf.c'
+    MANGLED dequantize_float
+
+    # type=USR max_buf=    40,253,699,616 visits=  1,548,219,216, time=   52.42s (  0.1%), time/visit=    0.03us
+    # name='precision'
+    # file='zfp/src/template/codecf.c'
+    MANGLED precision
+
+    # type=USR max_buf=    40,253,699,616 visits=  1,548,219,216, time=   43.05s (  0.1%), time/visit=    0.03us
+    # name='with_maxbits'
+    # file='zfp/src/template/codec.c'
+    MANGLED with_maxbits
+
+    # type=USR max_buf=    40,253,699,616 visits=  1,548,219,216, time=  134.96s (  0.2%), time/visit=    0.09us
+    # name='decode_ints_uint32'
+    # file='zfp/src/template/decode.c'
+    MANGLED decode_ints_uint32
+
+    # type=USR max_buf=    40,253,699,616 visits=  1,548,219,216, time= 4844.95s (  8.4%), time/visit=    3.13us
+    # name='decode_many_ints_uint32'
+    # file='zfp/src/template/decode.c'
+    MANGLED decode_many_ints_uint32
+
+    # type=USR max_buf=    40,253,699,616 visits=  1,548,219,216, time=10721.56s ( 18.7%), time/visit=    6.93us
+    # name='inv_order_int32'
+    # file='zfp/src/template/decode.c'
+    MANGLED inv_order_int32
+
+    # type=USR max_buf=    40,253,699,616 visits=  1,548,219,216, time=   97.76s (  0.2%), time/visit=    0.06us
+    # name='zfp_decode_block_float_4'
+    # file='zfp/src/template/decodef.c'
+    MANGLED zfp_decode_block_float_4
+
+    # type=USR max_buf=    40,253,699,616 visits=  1,548,219,216, time=  222.36s (  0.4%), time/visit=    0.14us
+    # name='decode_block_float_4'
+    # file='zfp/src/template/decodef.c'
+    MANGLED decode_block_float_4
+
+    # type=USR max_buf=    40,253,699,616 visits=  1,548,219,216, time=  179.46s (  0.3%), time/visit=    0.12us
+    # name='decode_block_int32_4'
+    # file='zfp/src/template/decode.c'
+    MANGLED decode_block_int32_4
+
+    # type=USR max_buf=    40,253,699,616 visits=  1,548,219,216, time=11420.67s ( 19.9%), time/visit=    7.38us
+    # name='inv_xform_int32_4'
+    # file='zfp/src/template/decode4.c'
+    MANGLED inv_xform_int32_4
+
+    # type=USR max_buf=     6,284,271,162 visits=    241,702,737, time=   10.14s (  0.0%), time/visit=    0.04us
+    # name='zfp_field_dimensionality'
+    # file='zfp/src/zfp.c'
+    MANGLED zfp_field_dimensionality
+
+    # type=USR max_buf=     4,189,514,108 visits=    161,135,158, time=    9.42s (  0.0%), time/visit=    0.06us
+    # name='zfp_field_precision'
+    # file='zfp/src/zfp.c'
+    MANGLED zfp_field_precision
+
+    # type=USR max_buf=     4,189,514,108 visits=    161,135,158, time=    4.95s (  0.0%), time/visit=    0.03us
+    # name='zfp_type_size'
+    # file='zfp/src/zfp.c'
+    MANGLED zfp_type_size
+
+    # type=USR max_buf=     2,094,757,054 visits=     80,567,579, time=    4.41s (  0.0%), time/visit=    0.05us
+    # name='zfp_stream_set_rate'
+    # file='zfp/src/zfp.c'
+    MANGLED zfp_stream_set_rate
+
+    # type=USR max_buf=     2,094,757,054 visits=     80,567,579, time=   16.04s (  0.0%), time/visit=    0.20us
+    # name='zfp_stream_maximum_size'
+    # file='zfp/src/zfp.c'
+    MANGLED zfp_stream_maximum_size
+
+    # type=USR max_buf=     2,094,757,054 visits=     80,567,579, time=    3.24s (  0.0%), time/visit=    0.04us
+    # name='zfp_stream_close'
+    # file='zfp/src/zfp.c'
+    MANGLED zfp_stream_close
+
+    # type=USR max_buf=     2,094,757,054 visits=     80,567,579, time=    5.22s (  0.0%), time/visit=    0.06us
+    # name='zfp_stream_open'
+    # file='zfp/src/zfp.c'
+    MANGLED zfp_stream_open
+
+    # type=USR max_buf=     2,094,757,054 visits=     80,567,579, time=    5.29s (  0.0%), time/visit=    0.07us
+    # name='zfp_field_blocks'
+    # file='zfp/src/zfp.c'
+    MANGLED zfp_field_blocks
+
+    # type=USR max_buf=     2,094,757,054 visits=     80,567,579, time=    4.12s (  0.0%), time/visit=    0.05us
+    # name='zfp_field_type'
+    # file='zfp/src/zfp.c'
+    MANGLED zfp_field_type
+
+    # type=USR max_buf=     2,094,757,054 visits=     80,567,579, time=    3.93s (  0.0%), time/visit=    0.05us
+    # name='zfp_field_free'
+    # file='zfp/src/zfp.c'
+    MANGLED zfp_field_free
+
+    # type=USR max_buf=     2,094,757,054 visits=     80,567,579, time=    8.02s (  0.0%), time/visit=    0.10us
+    # name='zfp_field_4d'
+    # file='zfp/src/zfp.c'
+    MANGLED zfp_field_4d
+
+    # type=USR max_buf=     2,094,757,054 visits=     80,567,579, time=    3.38s (  0.0%), time/visit=    0.04us
+    # name='zfp_field_alloc'
+    # file='zfp/src/zfp.c'
+    MANGLED zfp_field_alloc
+
+    # type=USR max_buf=     2,094,757,054 visits=     80,567,579, time=    3.24s (  0.0%), time/visit=    0.04us
+    # name='is_reversible'
+    # file='zfp/src/zfp.c'
+    MANGLED is_reversible
+
+    # type=USR max_buf=     2,064,845,666 visits=     79,417,141, time=    4.17s (  0.0%), time/visit=    0.05us
+    # name='stream_close'
+    # file='zfp/include/zfp/bitstream.inl'
+    MANGLED stream_close
+
+    # type=USR max_buf=     2,064,845,666 visits=     79,417,141, time=    6.46s (  0.0%), time/visit=    0.08us
+    # name='stream_open'
+    # file='zfp/include/zfp/bitstream.inl'
+    MANGLED stream_open
+
+    # type=USR max_buf=     2,064,844,288 visits=     79,417,088, time=  334.90s (  0.6%), time/visit=    4.22us
+    # name='ggml_vec_dot_zfp_f32'
+    # file='ggml/src/ggml-quants.c'
+    #MANGLED ggml_vec_dot_zfp_f32
+
+SCOREP_REGION_NAMES_END

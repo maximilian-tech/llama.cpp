@@ -1,0 +1,113 @@
+# Initial filter file, starting point for further adaptation.
+#
+# Considerations:
+#  - check possible wildcard options
+#  - check selected functions for relevancy
+#    (w.r.t. your knowledge of the application)
+#
+# Generated with the following parameters:
+#  - A region has to use at least 0.1% of the estimated trace buffer.
+#  - A region has to have a time/visits value of less than 100 us.
+#  - A region has to have at least 10 visits.
+#  - A region that is of type USR.
+#
+# The file contains comments for each region providing additional information
+# regarding the respective region.
+# The entries are sorted by `maxbuffer`.
+# The common prefix for the files is:
+# '/home/s0872522/workspaces/horse/s0872522-llm-zfp/llama.cpp/'
+#
+# Please refer to the Score-P user guide for more options on filtering.
+SCOREP_REGION_NAMES_BEGIN
+  EXCLUDE
+    # type=USR max_buf=21,198,892,416 visits=  815,342,016, time=  53.70s (  1.3%), time/visit=    0.07us
+    # name='zfp_stream_set_bit_stream'
+    # file='zfp/src/zfp.c'
+    MANGLED zfp_stream_set_bit_stream
+
+    # type=USR max_buf=21,198,892,416 visits=  815,342,016, time=  60.35s (  1.5%), time/visit=    0.07us
+    # name='stream_reset'
+    # file='zfp/src/bitstream.c'
+    MANGLED stream_reset
+
+    # type=USR max_buf=21,198,892,416 visits=  815,342,016, time= 573.22s ( 13.9%), time/visit=    0.70us
+    # name='zfp_decode_block_float_4'
+    # file='zfp/src/decode4f.c'
+    MANGLED zfp_decode_block_float_4
+
+    # type=USR max_buf=21,198,892,416 visits=  815,342,016, time=2655.42s ( 64.2%), time/visit=    3.26us
+    # name='decode_ints_uint32'
+    # file='zfp/src/decode4f.c'
+    MANGLED decode_ints_uint32
+
+    # type=USR max_buf= 1,118,017,004 visits=   43,000,654, time=   4.13s (  0.1%), time/visit=    0.10us
+    # name='zfp_field_4d'
+    # file='zfp/src/zfp.c'
+    MANGLED zfp_field_4d
+
+    # type=USR max_buf= 1,118,017,004 visits=   43,000,654, time=   2.86s (  0.1%), time/visit=    0.07us
+    # name='zfp_field_free'
+    # file='zfp/src/zfp.c'
+    MANGLED zfp_field_free
+
+    # type=USR max_buf= 1,118,017,004 visits=   43,000,654, time=   3.59s (  0.1%), time/visit=    0.08us
+    # name='zfp_field_type'
+    # file='zfp/src/zfp.c'
+    MANGLED zfp_field_type
+
+    # type=USR max_buf= 1,118,017,004 visits=   43,000,654, time=   3.45s (  0.1%), time/visit=    0.08us
+    # name='zfp_field_dimensionality'
+    # file='zfp/src/zfp.c'
+    MANGLED zfp_field_dimensionality
+
+    # type=USR max_buf= 1,118,017,004 visits=   43,000,654, time=   3.92s (  0.1%), time/visit=    0.09us
+    # name='zfp_stream_open'
+    # file='zfp/src/zfp.c'
+    MANGLED zfp_stream_open
+
+    # type=USR max_buf= 1,118,017,004 visits=   43,000,654, time=   2.70s (  0.1%), time/visit=    0.06us
+    # name='zfp_stream_close'
+    # file='zfp/src/zfp.c'
+    MANGLED zfp_stream_close
+
+    # type=USR max_buf= 1,118,017,004 visits=   43,000,654, time=   3.45s (  0.1%), time/visit=    0.08us
+    # name='zfp_stream_maximum_size'
+    # file='zfp/src/zfp.c'
+    MANGLED zfp_stream_maximum_size
+
+    # type=USR max_buf= 1,118,017,004 visits=   43,000,654, time=   3.34s (  0.1%), time/visit=    0.08us
+    # name='zfp_stream_set_rate'
+    # file='zfp/src/zfp.c'
+    MANGLED zfp_stream_set_rate
+
+    # type=USR max_buf= 1,086,912,216 visits=   41,804,316, time=   3.20s (  0.1%), time/visit=    0.08us
+    # name='stream_open'
+    # file='zfp/src/bitstream.c'
+    MANGLED stream_open
+
+    # type=USR max_buf= 1,086,912,216 visits=   41,804,316, time=   2.57s (  0.1%), time/visit=    0.06us
+    # name='stream_close'
+    # file='zfp/src/bitstream.c'
+    MANGLED stream_close
+
+    # type=USR max_buf= 1,086,911,488 visits=   41,804,288, time= 164.13s (  4.0%), time/visit=    3.93us
+    # name='ggml_vec_dot_zfp_f32'
+    # file='ggml/src/ggml-quants.c'
+    MANGLED ggml_vec_dot_zfp_f32
+
+    # type=USR max_buf=   140,549,448 visits=    5,405,748, time=   0.31s (  0.0%), time/visit=    0.06us
+    # name='std::less<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > >::operator()(std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > const&, std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > const&) const'
+    # file='src/llama.cpp'
+    MANGLED _ZNKSt4lessISt4pairINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES6_EEclERKS7_SA_
+
+    # type=USR max_buf=   131,561,196 visits=    5,060,046, time=   0.90s (  0.0%), time/visit=    0.18us
+    # name='ggml_type_size'
+    # file='ggml/src/ggml.c'
+    MANGLED ggml_type_size
+
+    # type=USR max_buf=   105,644,032 visits=    4,063,232, time=   1.66s (  0.0%), time/visit=    0.41us
+    # name='ggml_vec_dot_f16'
+    # file='ggml/src/ggml.c'
+    MANGLED ggml_vec_dot_f16
+
+SCOREP_REGION_NAMES_END
