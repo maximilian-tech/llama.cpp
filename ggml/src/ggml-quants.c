@@ -4,8 +4,9 @@
 #include "ggml-quants.h"
 #include "ggml-impl.h"
 #include "ggml-cpu-impl.h"
+#ifdef GGML_ZFP
 #include "zfp.h"
-
+#endif
 
 #include <math.h>
 #include <string.h>
@@ -3112,6 +3113,7 @@ size_t quantize_q6_K(const float * restrict src, void * restrict dst, int64_t nr
     return nrow * row_size;
 }
 
+#ifdef GGML_ZFP
 static void
 quantize_zfp_impl( const float* restrict src,
                    void* restrict        dst,
@@ -3354,6 +3356,7 @@ ggml_vec_dot_zfp_zfp( int                   n,
     *s = sumf;
 }
 
+#endif // GGML_ZFP
 static void quantize_row_q4_0_impl(const float * restrict x, block_q4_0 * restrict y, int64_t n_per_row, const float * quant_weights) {
     static_assert(QK4_0 == 32, "QK4_0 must be 32");
 
@@ -15982,7 +15985,9 @@ bool ggml_validate_row_data(enum ggml_type type, const void * data, size_t nbyte
         case GGML_TYPE_I16:
         case GGML_TYPE_I32:
         case GGML_TYPE_I64:
+#ifdef GGML_ZFP
         case GGML_TYPE_ZFP:
+#endif
             // nothing to validate
             break;
         default:

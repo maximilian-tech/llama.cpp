@@ -390,7 +390,9 @@ extern "C" {
         GGML_TYPE_Q4_0_8_8 = 33,
         GGML_TYPE_TQ1_0   = 34,
         GGML_TYPE_TQ2_0   = 35,
+#ifdef GGML_ZFP        
         GGML_TYPE_ZFP     = 38,
+#endif        
         GGML_TYPE_COUNT,
     };
 
@@ -435,7 +437,9 @@ extern "C" {
         GGML_FTYPE_MOSTLY_Q4_0_4_4 = 25, // except 1d tensors
         GGML_FTYPE_MOSTLY_Q4_0_4_8 = 26, // except 1d tensors
         GGML_FTYPE_MOSTLY_Q4_0_8_8 = 27, // except 1d tensors
+#ifdef GGML_ZFP        
         GGML_FTYPE_MOSTLY_ZFP     = 38, // except 1d tensors
+#endif
     };
 
     // available tensor operations:

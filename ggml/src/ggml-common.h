@@ -140,7 +140,7 @@ typedef sycl::half2 ggml_half2;
 #define QR3_S 4
 
 #endif // GGML_COMMON_DECL_CUDA || GGML_COMMON_DECL_HIP
-
+#ifdef GGML_ZFP
 #include "zfp.h"
 #ifndef ZFPDBG
     #define ZFPDBG 0
@@ -191,7 +191,7 @@ typedef sycl::half2 ggml_half2;
     #define ZFP_ENCODE_BLOCK(...) zfp_encode_block_float_4(__VA_ARGS__)
     #define ZFP_DECODE_BLOCK(...) zfp_decode_block_float_4(__VA_ARGS__)
 #endif //ZFPDIM
-
+#endif
 #define QK4_0 32
 typedef struct {
     ggml_half d;           // delta
