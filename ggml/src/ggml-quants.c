@@ -3114,6 +3114,9 @@ size_t quantize_q6_K(const float * restrict src, void * restrict dst, int64_t nr
 }
 
 #ifdef GGML_ZFP
+/**
+ * This function compresses 'src' of size 'n' int 'dst'
+ */
 static void
 quantize_zfp_impl( const float* restrict src,
                    void* restrict        dst,
@@ -3137,6 +3140,7 @@ quantize_zfp_impl( const float* restrict src,
     /* compress */
     //printf("%lu, %lu, %f, %ld\n", n, d, pow(4,d), n / (int64_t)pow(4,d));fflush(stdout);
     bitstream* stream = stream_open( dst, bytes );
+    // Loop over the 4^d chunks compress them
     for ( int64_t i = 0; i < n/ZFPBLOCK; ++i )
     { //(int64_t)zfp_field_blocks(field)/*n / (int64_t)pow(4,d)*/; ++i) {
     
@@ -3148,6 +3152,7 @@ quantize_zfp_impl( const float* restrict src,
 
         //stream_close(stream);
     }
+
     stream_close(stream);
 //    zfp_stream_flush(zfp);
 //    zfp_stream_rewind(zfp);
@@ -3170,6 +3175,9 @@ quantize_zfp_impl( const float* restrict src,
     //free(buffer);
 }
 
+/**
+ * This function decompresses 'src' of size 'n' into 'dst'
+ */
 static void
 dequantize_zfp_impl( const void * restrict src,
                      float * restrict      dst,
@@ -3186,7 +3194,10 @@ dequantize_zfp_impl( const void * restrict src,
 //    zfp_stream_rewind(zfp);//TODO???needed???
 //    ZFP_RW_HEADER(zfp, field, 0);
 //    zfp_field_set_pointer(field, dst);//TODO???needed???
-
+        
+    // Different RATE for different 
+        
+    
     //TODO: what if != multiple of 256 -->  Partial  BLOCK
     bitstream* stream = stream_open(src, bytes);
     for ( int64_t i = 0; i < n/ZFPBLOCK; ++i )
@@ -3207,6 +3218,9 @@ dequantize_zfp_impl( const void * restrict src,
 //    stream_close(stream);
 }
 
+/**
+ * Alias, because there is no propr 'ref'
+ */
 void quantize_row_zfp_ref( const float * restrict src,
                            void * restrict        dst,
                            int64_t                n_per_row)
@@ -3214,6 +3228,9 @@ void quantize_row_zfp_ref( const float * restrict src,
     quantize_zfp_impl( src, dst, n_per_row, NULL );
 }
 
+/**
+ * Alias, because there is no propr 'ref'
+ */
 void quantize_row_zfp( const float * restrict src,
                        void * restrict        dst,
                        int64_t                n_per_row )
@@ -3221,6 +3238,9 @@ void quantize_row_zfp( const float * restrict src,
     quantize_row_zfp_ref( src, dst, n_per_row );
 }
 
+/**
+ * Entry Point for 'quantize_zfp'
+ */
 size_t quantize_zfp( const float * restrict src,
                      void * restrict        dst,
                      int64_t                nrow,
@@ -3243,11 +3263,12 @@ size_t quantize_zfp( const float * restrict src,
     return nrow * row_size;
 }
 
-void dequantize_row_zfp(const void * restrict src,
-                        float * restrict      dst,
-                        int64_t               n )
+void
+dequantize_row_zfp( const void * restrict src,
+                    float * restrict      dst,
+                    int64_t               n )
 {
-    dequantize_zfp_impl(src, dst, n);
+    dequantize_zfp_impl( src, dst, n );
 }
 
 void
@@ -3268,11 +3289,15 @@ ggml_vec_dot_zfp_f32(int                    n,
     UNUSED(by);
     if(ZFPDBG){assert(n % ZFPBLOCK == 0);}
 
-    float sumf = 0.0, x[ZFPBLOCK], *y;
+    float sumf = 0.0;
+    float x[ZFPBLOCK];
+    float *y;
 
     zfp_field* field  = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK);
-    zfp_stream* zfp   = zfp_stream_open(NULL);ZFP_STREAM_SET_COMPRESSION(zfp, field);
+    zfp_stream* zfp   = zfp_stream_open(NULL);
+    ZFP_STREAM_SET_COMPRESSION(zfp, field);
     size_t bytes      = zfp_stream_maximum_size(zfp, field);
+
     bitstream* stream = stream_open(vx, bytes);
 
     for (int64_t i = 0; i < n/ZFPBLOCK; ++i)
@@ -3282,8 +3307,11 @@ ggml_vec_dot_zfp_f32(int                    n,
         ZFP_RW_HEADER(zfp, field, 0);
         ZFP_DECODE_BLOCK(zfp, x);
         y = vy + i*ZFPBLOCK;
-        for (uint16_t j = 0; j < ZFPBLOCK; ++j)
+        #pragma omp simd safelen(ZFPBLOCK) simdlen(16) reduce(+:sumf)
+        for (int j = 0; j < ZFPBLOCK; ++j)
+        {
             sumf += x[j] * y[j];
+        }
     }
 
     stream_close(stream);
