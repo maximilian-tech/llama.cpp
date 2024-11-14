@@ -4,3 +4,6 @@
 [submodule "OpenBLAS"]
 	path = OpenBLAS
 	url = https://github.com/OpenMathLib/OpenBLAS.git
+[submodule "zfp"]
+	path = zfp
+	url = git@github.com:maximilian-tech/zfp.git
