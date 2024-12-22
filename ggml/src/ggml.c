@@ -22035,7 +22035,17 @@ size_t ggml_quantize_chunk(
         default:
             assert(false);
     }
-
+#ifdef GGML_ZFP            
+    // Increment gloabal size if not already happend within ZFP 'quantization'
+    if ( type != GGML_TYPE_ZFP)
+    {
+        #pragma omp critical
+        {
+            zfp_compressed_size += result;
+        }
+    }
+#endif
+    
     GGML_ASSERT(result == nrows * row_size);
 
     return result;

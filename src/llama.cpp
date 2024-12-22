@@ -18524,9 +18524,18 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         ::zeros(fout, meta_size);
     };
 
+#ifdef GGML_ZFP                
+    size_t nelements_global = 0;
+#endif
     const auto tn = LLM_TN(model.arch);
     new_ofstream(0);
     for (int i = 0; i < ml.n_tensors; ++i) {
+        
+#ifdef GGML_ZFP
+        int skip_until_layer = 0;
+        skip_quantization = i<skip_until_layer? 1:0; // Skip:1 , do not Skip:1 . This could be used to preserve super weights
+#endif
+
         auto weight = ml.get_weight(i);
         struct ggml_tensor * tensor = weight->tensor;
         if (weight->idx != cur_split && params->keep_split) {
@@ -18612,6 +18621,10 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             new_data = tensor->data;
             new_size = ggml_nbytes(tensor);
             LLAMA_LOG_INFO("size = %8.3f MB\n", ggml_nbytes(tensor)/1024.0/1024.0);
+#ifdef GGML_ZFP
+            zfp_compressed_size += new_size;
+            nelements_global += ggml_nelements(tensor);
+#endif 
         } else {
             const int64_t nelements = ggml_nelements(tensor);
 
@@ -18702,7 +18715,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 const float * imatrix_03 = imatrix ? imatrix + i03 * n_per_row : nullptr;
 
                 new_size += llama_tensor_quantize_internal(new_type, f32_data_03, new_data_03, chunk_size, nrows, n_per_row, imatrix_03, workers, nthread_use);
-#ifdef GGML_ZFP                
+#ifdef GGML_ZFP
                 /*TODO just debugging*/if (ZFPDBG && GGML_TYPE_ZFP == new_type){ // && ZFPRATE < 0) {
                     const ggml_type_traits * qtype = ggml_get_type_traits(new_type);
                     float *vali_array = (float*)malloc(nelements_matrix*sizeof(float));
@@ -18714,8 +18727,12 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 }
 #endif                
             }
+#ifdef GGML_ZFP
+            nelements_global += nelements;
+#endif
             LLAMA_LOG_INFO("size = %8.2f MiB -> %8.2f MiB\n", ggml_nbytes(tensor)/1024.0/1024.0, new_size/1024.0/1024.0);
         }
+
         total_size_org += ggml_nbytes(tensor);
         total_size_new += new_size;
 
@@ -18728,6 +18745,16 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         fout.write((const char *) new_data, new_size);
         zeros(fout, GGML_PAD(new_size, align) - new_size);
     }
+    
+#ifdef GGML_ZFP
+    double old = total_size_org/1024.0/1024.0;
+    double zfp_size = zfp_compressed_size/1024.0/1024.0;
+    double CR = old / zfp_size;
+    double bitPerWeight = 8.0*zfp_compressed_size / (double)nelements_global;
+    printf("\nZFP_RESULT,type,%s,value,%f,original_size(MiB),%8.2f,compressed_size(MiB),%8.2f,compression_ratio,%8.2f,bits_per_weight,%f\n", zfp_comp_type, zfp_value, old,  zfp_size, CR, bitPerWeight);
+    fflush(stdout);
+#endif
+    
     close_ofstream();
     for (auto & c:ctx_outs) {
         gguf_free(c);

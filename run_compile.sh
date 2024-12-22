@@ -1,4 +1,6 @@
 #!/bin/env bash
+ZFP_ACCURACY=OFF
+[ "$1" = "use_accuracy" ] && ZFP_ACCURACY=ON
 
 set -euo pipefail
 
@@ -9,7 +11,6 @@ SCOREP_WRAPPER=OFF cmake \
 	-G Ninja \
 	-B build \
 	-DCMAKE_BUILD_TYPE=Release \
-	-DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
 	-DBUILD_SHARED_LIBS=False \
 	-DGGML_LTO=True \
 	-DGGML_NATIVE=True \
@@ -26,11 +27,12 @@ SCOREP_WRAPPER=OFF cmake \
 	-DCMAKE_C_COMPILER=clang \
 	-DCMAKE_CXX_COMPILER=clang++ \
 	-DCMAKE_LINKER_TYPE=LLD \
+	-DGGML_ZFP_ACCURACY=${ZFP_ACCURACY} \
 	--fresh #\
 #	-DCMAKE_C_COMPILER=scorep-clang \
 #	-DCMAKE_CXX_COMPILER=scorep-clang++ 
 
-cmake --build build 
+cmake --build build
 #pushd build
 
 #	make -j 8 -B

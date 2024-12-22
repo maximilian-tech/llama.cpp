@@ -3117,6 +3117,10 @@ size_t quantize_q6_K(const float * restrict src, void * restrict dst, int64_t nr
 /**
  * This function compresses 'src' of size 'n' int 'dst'
  */
+size_t zfp_compressed_size = 0.;
+int skip_quantization = 0;
+char zfp_comp_type[16] = "";
+double zfp_value = 0.;
 static void
 quantize_zfp_impl( const float* restrict src,
                    void* restrict        dst,
@@ -3136,7 +3140,7 @@ quantize_zfp_impl( const float* restrict src,
 //    bitstream* stream = stream_open(dst/*buffer*/, bytes);
 //    zfp_stream_set_bit_stream(zfp, stream);
 //    ZFP_RW_HEADER(zfp, field, 1);
-
+    
     /* compress */
     //printf("%lu, %lu, %f, %ld\n", n, d, pow(4,d), n / (int64_t)pow(4,d));fflush(stdout);
     bitstream* stream = stream_open( dst, bytes );
@@ -3147,9 +3151,12 @@ quantize_zfp_impl( const float* restrict src,
         stream_reset( stream, dst+i*bytes, bytes ); //bitstream* stream = stream_open(dst+i*bytes /*buffer*/, bytes);
         zfp_stream_set_bit_stream( zfp, stream );
         ZFP_RW_HEADER( zfp, field, 1 );
-        ZFP_ENCODE_BLOCK( zfp, ( const float* )( src + i * ZFPBLOCK ) ); //+ i * (int64_t)pow(4,ZFPDIM)));
+        size_t zfp_compressed_size_tmp = ZFP_ENCODE_BLOCK( zfp, ( const float* )( src + i * ZFPBLOCK ) ); //+ i * (int64_t)pow(4,ZFPDIM)));
         zfp_stream_flush( zfp );
-
+        #pragma omp critical
+        {
+            zfp_compressed_size += zfp_compressed_size_tmp/8;
+        }
         //stream_close(stream);
     }
 

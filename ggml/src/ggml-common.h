@@ -2,7 +2,7 @@
 
 #if defined(GGML_COMMON_DECL_C)
 #include <stdint.h>
-
+#include <stddef.h>
 typedef uint16_t ggml_half;
 typedef uint32_t ggml_half2;
 
@@ -141,6 +141,7 @@ typedef sycl::half2 ggml_half2;
 
 #endif // GGML_COMMON_DECL_CUDA || GGML_COMMON_DECL_HIP
 #ifdef GGML_ZFP
+extern size_t zfp_compressed_size;
 #include "zfp.h"
 #ifndef ZFPDBG
     #define ZFPDBG 0
@@ -153,6 +154,12 @@ typedef sycl::half2 ggml_half2;
 #ifndef ZFPRATE
     #define ZFPRATE 4.0 // approx 4 bits/float
 #endif  //ZFPRATE
+#ifndef ZFPTOL
+    #define ZFPTOL (0.1) // approx 4 bits/float
+#endif  //ZFPRATE
+#ifndef ZFP_PREC
+    #define ZFP_PREC (4)
+#endif    
 /*XXX: ensure gguf has same ZFPDBG flag in read mode as it had in write mode */
 #define ZFPHEADER (ZFP_HEADER_MAGIC | ZFP_HEADER_MODE)
 #define ZFP_RW_HEADER(zfp, field, rw) /* read: rw==0 ; write: rw!=0 */         \
@@ -161,14 +168,52 @@ typedef sycl::half2 ggml_half2;
          else if (ZFPDBG && !rw && !zfp_read_header(zfp, field, ZFPHEADER))    \
                    { fprintf(stderr, "cannot read header\n"); assert(false); } \
     } while (0)
-#define ZFP_STREAM_SET_COMPRESSION(zfp, field)                                 \
-    do { if (ZFPRATE < 0.0) { zfp_stream_set_reversible(zfp); }                \
-         else { __attribute__((unused)) double __ret = zfp_stream_set_rate(zfp, \
-                                                                           ZFPRATE, \
-                                                                           zfp_field_type(field), \
-                                                                           zfp_field_dimensionality(field), \
-                                                                           zfp_false); }    \
+    
+    
+#define ZFP_STREAM_SET_COMPRESSION_RATE(zfp, field)                                 \
+    do { \
+        double rate = 4.0; \
+        char *value = getenv("ZFP_RATE"); \
+        if (value) { \
+            rate = atoi(value); \
+        } \
+        if (skip_quantization == 1) \
+        { rate = 16.0; }            \
+        strncpy(zfp_comp_type, "rate", sizeof(zfp_comp_type) - 1); \
+        zfp_value = rate; \
+        if (rate < 0.0) { zfp_stream_set_reversible(zfp); }                \
+         else { \
+            __attribute__((unused)) double __ret = \
+                zfp_stream_set_rate(zfp, \
+                                    rate, \
+                                    zfp_field_type(field), \
+                                    zfp_field_dimensionality(field), \
+                                    zfp_false); }    \
     } while (0)
+
+#define ZFP_STREAM_SET_COMPRESSION_ACC(zfp, field)                                 \
+    do { \
+        double tol = 0.0001; \
+        char *value = getenv("ZFP_TOL"); \
+        if (value) { \
+            tol = atof(value); \
+        } \
+        if (skip_quantization == 1) \
+        { tol = 0.000001; } \
+        strncpy(zfp_comp_type, "accuracy", sizeof(zfp_comp_type) - 1); \
+        zfp_value = tol; \
+        __attribute__((unused)) double __ret = \
+                zfp_stream_set_accuracy(zfp, \
+                                        tol);    \
+    } while (0)
+
+#if defined(ZFP_USE_RATE)
+    #define ZFP_STREAM_SET_COMPRESSION(a,b) ZFP_STREAM_SET_COMPRESSION_RATE((a),(b))
+#elif defined(ZFP_USE_ACC)
+    #define ZFP_STREAM_SET_COMPRESSION(a,b) ZFP_STREAM_SET_COMPRESSION_ACC((a),(b))
+#else
+    #error "Specify either -DZFP_USE_RATE or -DZFP_USE_ACC"
+#endif
 
 #if   ZFPDIM == 1
 #define ZFPBLOCK (4)

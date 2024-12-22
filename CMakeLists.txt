@@ -84,8 +84,18 @@ set(GGML_ALL_WARNINGS       ${LLAMA_ALL_WARNINGS})
 set(GGML_FATAL_WARNINGS     ${LLAMA_FATAL_WARNINGS})
 
 option(GGML_ZFP_ENABLE "Build GGML with ZFP compression support" ON)
+option(GGML_ZFP_ACCURACY "Use ZFP Accuracy Mode instead of ZFP Rate mode" OFF)
 if(GGML_ZFP_ENABLE)
     add_compile_definitions(-DGGML_ZFP)
+
+    if(GGML_ZFP_ACCURACY)
+        add_compile_definitions(ZFP_USE_ACC)
+        set(CMAKE_EXECUTABLE_SUFFIX ".acc")
+    else()
+        add_compile_definitions(ZFP_USE_RATE)
+        set(CMAKE_EXECUTABLE_SUFFIX ".rate")
+    endif()
+
 endif()
 
 # change the default for these ggml options

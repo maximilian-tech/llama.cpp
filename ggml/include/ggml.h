@@ -396,6 +396,12 @@ extern "C" {
         GGML_TYPE_COUNT,
     };
 
+#ifdef GGML_ZFP        
+    extern size_t zfp_compressed_size;
+    extern int skip_quantization;
+    extern char zfp_comp_type[16];
+    extern double zfp_value;
+#endif
     // precision
     enum ggml_prec {
         GGML_PREC_DEFAULT,
