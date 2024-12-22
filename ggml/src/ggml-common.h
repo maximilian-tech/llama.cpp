@@ -176,7 +176,7 @@ extern size_t zfp_compressed_size;
         double rate = 4.0; \
         char *value = getenv("ZFP_RATE"); \
         if (value) { \
-            rate = atoi(value); \
+            rate = atof(value); \
         } \
         if (skip_quantization == 1) \
         { rate = 16.0; }            \
