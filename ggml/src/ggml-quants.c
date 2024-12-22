@@ -3153,10 +3153,10 @@ quantize_zfp_impl( const float* restrict src,
         ZFP_RW_HEADER( zfp, field, 1 );
         size_t zfp_compressed_size_tmp = ZFP_ENCODE_BLOCK( zfp, ( const float* )( src + i * ZFPBLOCK ) ); //+ i * (int64_t)pow(4,ZFPDIM)));
         zfp_stream_flush( zfp );
-        #pragma omp critical
-        {
-            zfp_compressed_size += zfp_compressed_size_tmp/8;
-        }
+
+        #pragma omp atomic
+        zfp_compressed_size += zfp_compressed_size_tmp/8;
+
         //stream_close(stream);
     }
 

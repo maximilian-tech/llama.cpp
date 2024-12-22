@@ -147,19 +147,20 @@ extern size_t zfp_compressed_size;
     #define ZFPDBG 0
 #endif  //ZFPDBG
 #ifndef ZFPDIM
-    #define ZFPDIM 4
+    //#define ZFPDIM 2
+    #error "ZFPDIM is not defined!"
 #elif   ZFPDIM < 1 || ZFPDIM > 4
     #error  "unsupported zfp dimension"
 #endif  //ZFPDIM
-#ifndef ZFPRATE
-    #define ZFPRATE 4.0 // approx 4 bits/float
-#endif  //ZFPRATE
-#ifndef ZFPTOL
-    #define ZFPTOL (0.1) // approx 4 bits/float
-#endif  //ZFPRATE
-#ifndef ZFP_PREC
-    #define ZFP_PREC (4)
-#endif    
+// #ifndef ZFPRATE
+//     #define ZFPRATE 4.0 // approx 4 bits/float
+// #endif  //ZFPRATE
+// #ifndef ZFPTOL
+//     #define ZFPTOL (0.1) // approx 4 bits/float
+// #endif  //ZFPRATE
+// #ifndef ZFP_PREC
+//     #define ZFP_PREC (4)
+// #endif    
 /*XXX: ensure gguf has same ZFPDBG flag in read mode as it had in write mode */
 #define ZFPHEADER (ZFP_HEADER_MAGIC | ZFP_HEADER_MODE)
 #define ZFP_RW_HEADER(zfp, field, rw) /* read: rw==0 ; write: rw!=0 */         \
