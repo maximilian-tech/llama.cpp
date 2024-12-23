@@ -9,7 +9,7 @@ export NCPUS=4
 OUTPUT_SUMMARY=log.summary
 echo "" > $OUTPUT_SUMMARY
 
-for rate in 3.0 3.5 4.0 4.5 5.0 6.0 8.0 ; do
+for rate in 3.5 4.0 4.5 4.65 5.0 6.0 8.0 ; do
     echo $rate
     export ZFP_RATE=$rate
     OUTPUT_NAME="from_ZFPRATE_${ZFP_RATE}_dim_${DIM}"
