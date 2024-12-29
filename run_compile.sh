@@ -1,6 +1,8 @@
 #!/bin/env bash
-ZFP_ACCURACY=OFF
-[ "$1" = "use_accuracy" ] && ZFP_ACCURACY=ON
+ZFP_MODE="RATE"
+[ "$1" = "rate" ] && ZFP_MODE="RATE"
+[ "$1" = "acc" ] && ZFP_MODE="ACCURACY"
+[ "$1" = "prec" ] && ZFP_MODE="PRECISION"
 
 set -euo pipefail
 
@@ -27,7 +29,7 @@ for dim in 1 2 3 4 ; do
 		-DCMAKE_C_COMPILER=clang \
 		-DCMAKE_CXX_COMPILER=clang++ \
 		-DCMAKE_LINKER_TYPE=LLD \
-		-DGGML_ZFP_ACCURACY=${ZFP_ACCURACY} \
+		-DGGML_ZFP_MODE=${ZFP_MODE} \
 		-DGGML_ZFP_DIMENSION=${dim} \
 		--fresh #\
 	#	-DCMAKE_C_COMPILER=scorep-clang \

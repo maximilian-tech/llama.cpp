@@ -84,22 +84,26 @@ set(GGML_ALL_WARNINGS       ${LLAMA_ALL_WARNINGS})
 set(GGML_FATAL_WARNINGS     ${LLAMA_FATAL_WARNINGS})
 
 option(GGML_ZFP_ENABLE "Build GGML with ZFP compression support" ON)
-option(GGML_ZFP_ACCURACY "Use ZFP Accuracy Mode instead of ZFP Rate mode" OFF)
+set(GGML_ZFP_MODE "RATE" CACHE STRING "Set the ZFP compression threshold mode [RATE(default)|PRECISION|ACCURACY")
 
 if(GGML_ZFP_ENABLE)
     add_compile_definitions(-DGGML_ZFP)
     # Define a double variable with a default value
     set(GGML_ZFP_DIMENSION 4 CACHE STRING  "The default dimension for ZFP Dimension (4^dimension) length")
     add_compile_definitions(-DZFPDIM=${GGML_ZFP_DIMENSION})
-    if(GGML_ZFP_ACCURACY)
+    if(GGML_ZFP_MODE STREQUAL "ACCURACY" )
 
         add_compile_definitions(ZFP_USE_ACC)
         set(CMAKE_EXECUTABLE_SUFFIX ".acc")
-    else()
+    elseif( GGML_ZFP_MODE STREQUAL "RATE" )
         add_compile_definitions(ZFP_USE_RATE)
         set(CMAKE_EXECUTABLE_SUFFIX ".rate")
+    elseif( GGML_ZFP_MODE STREQUAL "PRECISION")
+        add_compile_definitions(ZFP_USE_PREC)
+        set(CMAKE_EXECUTABLE_SUFFIX ".prec")
+    else()
+        message(FATAL_ERROR "Specified unknown 'GGML_ZFP_MODE'")
     endif()
-
     # Append GGML_ZFP_DIMENSION to the executable suffix
     string(APPEND CMAKE_EXECUTABLE_SUFFIX ".dim_${GGML_ZFP_DIMENSION}")
 

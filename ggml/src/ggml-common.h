@@ -208,12 +208,31 @@ extern size_t zfp_compressed_size;
                                         tol);    \
     } while (0)
 
+
+#define ZFP_STREAM_SET_COMPRESSION_PREC(zfp, field)                                 \
+    do { \
+        unsigned int precision= 4; \
+        char *value = getenv("ZFP_PREC"); \
+        if (value) { \
+            precision = (unsigned int) atoi(value); \
+        } \
+        if (skip_quantization == 1) \
+        { precision = 16; } \
+        strncpy(zfp_comp_type, "precision", sizeof(zfp_comp_type) - 1); \
+        zfp_value = precision; \
+        __attribute__((unused)) unsigned int __ret = \
+                zfp_stream_set_precision(zfp, \
+                                        precision);    \
+    } while (0)
+
 #if defined(ZFP_USE_RATE)
     #define ZFP_STREAM_SET_COMPRESSION(a,b) ZFP_STREAM_SET_COMPRESSION_RATE((a),(b))
 #elif defined(ZFP_USE_ACC)
     #define ZFP_STREAM_SET_COMPRESSION(a,b) ZFP_STREAM_SET_COMPRESSION_ACC((a),(b))
+#elif defined(ZFP_USE_PREC)
+    #define ZFP_STREAM_SET_COMPRESSION(a,b) ZFP_STREAM_SET_COMPRESSION_PREC((a),(b))
 #else
-    #error "Specify either -DZFP_USE_RATE or -DZFP_USE_ACC"
+    #error "Specify either '-DZFP_USE_RATE' or '-DZFP_USE_ACC' or '-DZFP_USE_PREC'"
 #endif
 
 #if   ZFPDIM == 1
