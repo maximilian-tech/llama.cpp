@@ -9,7 +9,7 @@ export NCPUS=4
 OUTPUT_SUMMARY=log.summary
 echo "" > $OUTPUT_SUMMARY
 
-for prec in 8 16 32 ; do
+for prec in 8 9 10 11 12 13; do
     echo $prec
     export ZFP_PREC=$prec
     OUTPUT_NAME="from_ZFP-PREC_${ZFP_PREC}_dim_${DIM}"
@@ -17,8 +17,6 @@ for prec in 8 16 32 ; do
     ./build/bin/llama-quantize.prec.dim_${DIM} --allow-requantize  ${PREFIX}-ZFP_tmp.gguf ${PREFIX}-F16_${OUTPUT_NAME}.gguf F16 ${NCPUS}
     grep "^ZFP_RESULT" log.${OUTPUT_NAME} >> $OUTPUT_SUMMARY
 done
-
-exit 1
 
 for rate in 3.5 4.0 4.5 4.65 5.0 6.0 8.0 ; do
     echo $rate
