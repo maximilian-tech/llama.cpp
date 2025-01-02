@@ -1,5 +1,15 @@
 #!/bin/env bash
 
+#SBATCH -N 1
+#SBATCH -n 1
+#SBATCH -c 4
+#SBATCH --mem=50G
+#SBATCH -A p_darwin
+#SBATCH --time=10:00:00
+#SBATCH --hint=nomultithread
+
+source ../source_env_llvm.rc
+
 set euxo -pipefail
 
 PREFIX="./Meta-Llama-3-8B/Meta-Llama-3-8B"
@@ -9,7 +19,7 @@ export NCPUS=4
 OUTPUT_SUMMARY=log.summary
 echo "" > $OUTPUT_SUMMARY
 
-for prec in 8 9 10 11 12 13; do
+for prec in 08 09 10 11 12 13; do
     echo $prec
     export ZFP_PREC=$prec
     OUTPUT_NAME="from_ZFP-PREC_${ZFP_PREC}_dim_${DIM}"
@@ -18,7 +28,7 @@ for prec in 8 9 10 11 12 13; do
     grep "^ZFP_RESULT" log.${OUTPUT_NAME} >> $OUTPUT_SUMMARY
 done
 
-for rate in 3.5 4.0 4.5 4.65 5.0 6.0 8.0 ; do
+for rate in 3.50 4.00 4.50 4.65 5.00 6.00 8.00 ; do
     echo $rate
     export ZFP_RATE=$rate
     OUTPUT_NAME="from_ZFP-RATE_${ZFP_RATE}_dim_${DIM}"
@@ -27,7 +37,7 @@ for rate in 3.5 4.0 4.5 4.65 5.0 6.0 8.0 ; do
     grep "^ZFP_RESULT" log.${OUTPUT_NAME} >> $OUTPUT_SUMMARY
 done
 
-for tol in 0.01 0.1 0.12 0.13 ; do
+for tol in 0.01 0.10 0.12 0.13 ; do
     echo $tol
     export ZFP_TOL=$tol
     OUTPUT_NAME="from_ZFP-TOL_${ZFP_TOL}_dim_${DIM}"
