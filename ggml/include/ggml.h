@@ -397,10 +397,10 @@ extern "C" {
     };
 
 #ifdef GGML_ZFP        
-    extern size_t zfp_compressed_size;
-    extern int skip_quantization;
-    extern char zfp_comp_type[16];
-    extern double zfp_value;
+    extern size_t global_zfp_compressed_size;
+    extern int global_skip_quantization;
+    extern char global_zfp_comp_type[16];
+    extern double global_zfp_value;
 #endif
     // precision
     enum ggml_prec {

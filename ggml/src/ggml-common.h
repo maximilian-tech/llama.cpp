@@ -141,7 +141,7 @@ typedef sycl::half2 ggml_half2;
 
 #endif // GGML_COMMON_DECL_CUDA || GGML_COMMON_DECL_HIP
 #ifdef GGML_ZFP
-extern size_t zfp_compressed_size;
+extern size_t global_zfp_compressed_size;
 #include "zfp.h"
 #ifndef ZFPDBG
     #define ZFPDBG 0
@@ -178,10 +178,10 @@ extern size_t zfp_compressed_size;
         if (value) { \
             rate = atof(value); \
         } \
-        if (skip_quantization == 1) \
+        if (global_skip_quantization == 1) \
         { rate = 16.0; }            \
-        strncpy(zfp_comp_type, "rate", sizeof(zfp_comp_type) - 1); \
-        zfp_value = rate; \
+        strncpy(global_zfp_comp_type, "rate", sizeof(global_zfp_comp_type) - 1); \
+        global_zfp_value = rate; \
         if (rate < 0.0) { zfp_stream_set_reversible(zfp); }                \
          else { \
             __attribute__((unused)) double __ret = \
@@ -199,10 +199,10 @@ extern size_t zfp_compressed_size;
         if (value) { \
             tol = atof(value); \
         } \
-        if (skip_quantization == 1) \
+        if (global_skip_quantization == 1) \
         { tol = 0.000001; } \
-        strncpy(zfp_comp_type, "accuracy", sizeof(zfp_comp_type) - 1); \
-        zfp_value = tol; \
+        strncpy(global_zfp_comp_type, "accuracy", sizeof(global_zfp_comp_type) - 1); \
+        global_zfp_value = tol; \
         __attribute__((unused)) double __ret = \
                 zfp_stream_set_accuracy(zfp, \
                                         tol);    \
@@ -216,10 +216,10 @@ extern size_t zfp_compressed_size;
         if (value) { \
             precision = (unsigned int) atoi(value); \
         } \
-        if (skip_quantization == 1) \
+        if (global_skip_quantization == 1) \
         { precision = 16; } \
-        strncpy(zfp_comp_type, "precision", sizeof(zfp_comp_type) - 1); \
-        zfp_value = precision; \
+        strncpy(global_zfp_comp_type, "precision", sizeof(global_zfp_comp_type) - 1); \
+        global_zfp_value = precision; \
         __attribute__((unused)) unsigned int __ret = \
                 zfp_stream_set_precision(zfp, \
                                         precision);    \

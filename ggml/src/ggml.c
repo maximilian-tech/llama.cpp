@@ -22041,7 +22041,7 @@ size_t ggml_quantize_chunk(
     {
         #pragma omp critical
         {
-            zfp_compressed_size += result;
+            global_zfp_compressed_size += result;
         }
     }
 #endif

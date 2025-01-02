@@ -3117,10 +3117,10 @@ size_t quantize_q6_K(const float * restrict src, void * restrict dst, int64_t nr
 /**
  * This function compresses 'src' of size 'n' int 'dst'
  */
-size_t zfp_compressed_size = 0.;
-int skip_quantization = 0;
-char zfp_comp_type[16] = "";
-double zfp_value = 0.;
+size_t global_zfp_compressed_size = 0.;
+int global_skip_quantization = 0;
+char global_zfp_comp_type[16] = "";
+double global_zfp_value = 0.;
 static void
 quantize_zfp_impl( const float* restrict src,
                    void* restrict        dst,
@@ -3155,7 +3155,7 @@ quantize_zfp_impl( const float* restrict src,
         zfp_stream_flush( zfp );
 
         #pragma omp atomic
-        zfp_compressed_size += zfp_compressed_size_tmp/8;
+        global_zfp_compressed_size += zfp_compressed_size_tmp/8;
 
         //stream_close(stream);
     }

@@ -18533,7 +18533,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         
 #ifdef GGML_ZFP
         int skip_until_layer = 0;
-        skip_quantization = i<skip_until_layer? 1:0; // Skip:1 , do not Skip:1 . This could be used to preserve super weights
+        global_skip_quantization = i<skip_until_layer? 1:0; // Skip:1 , do not Skip:1 . This could be used to preserve super weights
 #endif
 
         auto weight = ml.get_weight(i);
@@ -18622,7 +18622,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             new_size = ggml_nbytes(tensor);
             LLAMA_LOG_INFO("size = %8.3f MB\n", ggml_nbytes(tensor)/1024.0/1024.0);
 #ifdef GGML_ZFP
-            zfp_compressed_size += new_size;
+            global_zfp_compressed_size += new_size;
             nelements_global += ggml_nelements(tensor);
 #endif 
         } else {
@@ -18748,10 +18748,10 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     
 #ifdef GGML_ZFP
     double old = total_size_org/1024.0/1024.0;
-    double zfp_size = zfp_compressed_size/1024.0/1024.0;
+    double zfp_size = global_zfp_compressed_size/1024.0/1024.0;
     double CR = old / zfp_size;
-    double bitPerWeight = 8.0*zfp_compressed_size / (double)nelements_global;
-    printf("\nZFP_RESULT,type,%s,value,%f,original_size(MiB),%8.2f,compressed_size(MiB),%8.2f,compression_ratio,%8.2f,bits_per_weight,%f\n", zfp_comp_type, zfp_value, old,  zfp_size, CR, bitPerWeight);
+    double bitPerWeight = 8.0*global_zfp_compressed_size / (double)nelements_global;
+    printf("\nZFP_RESULT,type,%s,value,%f,original_size(MiB),%8.2f,compressed_size(MiB),%8.2f,compression_ratio,%8.2f,bits_per_weight,%f\n", global_zfp_comp_type, global_zfp_value, old,  zfp_size, CR, bitPerWeight);
     fflush(stdout);
 #endif
     
