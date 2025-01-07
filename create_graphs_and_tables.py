@@ -15,6 +15,13 @@ def parse_estimates(data):
             estimates.append({"Label": label, "PPL": float(ppl), "Error": float(error)})
     return pd.DataFrame(estimates)
 
+def to_float(in_val):
+    try:
+        result = float(in_val)
+    except ValueError:
+        result = in_val
+    return result
+
 def parse_zfp_results(data):
     from io import StringIO
     csv_data = StringIO(data)
@@ -23,11 +30,16 @@ def parse_zfp_results(data):
         "Key3", "Compressed Size (MiB)", "Key4", "Compression Ratio", "Key5", "Bits per Weight"
     ])
     df = df[["Type", "Precision/Rate/Accuracy", "Original Size (MiB)", "Compressed Size (MiB)", "Compression Ratio", "Bits per Weight"]]
+    df["Precision/Rate/Accuracy"] = df["Precision/Rate/Accuracy"].apply(to_float)
     return df
 
 def decode_configuration(label):
-    if not isinstance(label, str) or not label.startswith("from_ZFP"):
+    if not isinstance(label, str):
         return pd.Series({"Config_Type": None, "Config_Value": None})
+
+    if not label.startswith("from_ZFP"):
+        return pd.Series({"Config_Type": "native", "Config_Value": label})
+
 
     lookup_tab = {
         "PREC": "precision",
@@ -38,7 +50,7 @@ def decode_configuration(label):
     parts = label.split("-")[1:]
     config_type = parts[0].split("_")[0]
     config_value = parts[0].split("_")[1]
-    return pd.Series({"Config_Type": lookup_tab.get(config_type), "Config_Value": config_value})
+    return pd.Series({"Config_Type": lookup_tab.get(config_type), "Config_Value": float(config_value)})
 
 def match_configurations(estimates_df, zfp_results_df):
     def match_row(row):
@@ -52,8 +64,9 @@ def match_configurations(estimates_df, zfp_results_df):
             })
         match = zfp_results_df[
             (zfp_results_df["Type"].str.contains(row["Config_Type"], na=False)) &
-            (zfp_results_df["Precision/Rate/Accuracy"] == float(row["Config_Value"]))
+            (zfp_results_df["Precision/Rate/Accuracy"] == row["Config_Value"])
         ]
+
         if not match.empty:
             return match.iloc[0]
         return pd.Series({
@@ -82,6 +95,14 @@ zfp_results_df = parse_zfp_results(zfp_results_data)
 
 estimates_df = pd.concat([estimates_df, estimates_df["Label"].apply(decode_configuration)], axis=1)
 combined_df = match_configurations(estimates_df, zfp_results_df)
+
+print(estimates_df)
+print(zfp_results_df)
+
+print(combined_df)
+
+import sys
+#sys.exit(1)
 
 # Plotting lines grouped by 'Type'
 if "Bits per Weight" in combined_df.columns and "PPL" in combined_df.columns and "Type" in combined_df.columns:

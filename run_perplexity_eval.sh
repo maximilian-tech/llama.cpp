@@ -21,19 +21,20 @@ OUTPUT_SUMMARY=ppl.summary
 
 echo "" > $OUTPUT_SUMMARY
 
-
 #PREFIX="./Meta-Llama-3-8B/Meta-Llama-3-8B"
+
 DIM="4"
 export NCPUS=8
 
 SETTINGS="-ngl 300 --ctx-size 4096 -s 1 -t ${NCPUS} --perplexity --file ./Meta-Llama-3-8B/wiki.train.raw"
 
-for model in F16 Q8_K Q4_K ; do
+for model in F16 Q8_0 Q4_0 ; do
 
     ./_build/bin/llama-perplexity ${SETTINGS} -m ${PREFIX}-${model}.gguf  2>&1 | tee ppl.${model}
     echo "${model} -- $(grep 'Final estimate: PPL =' ppl.${model})" >> "$OUTPUT_SUMMARY"
 
 done
+
 
 for prec in 08 09 10 11 12 13; do
     echo $prec
