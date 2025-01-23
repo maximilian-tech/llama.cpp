@@ -205,5 +205,26 @@ done
 ## competing compressors https://sdrbench.github.io/
 ```
 
+
+# Planning of data layout
+1. Get Perplexity via `llama-perplexity + grep`
+2. Get modelsize|bpw from `llama-quantize`
+    - ToDo: Add additional output for NON-ZFP Quantizations.
+3. Differentiating Factors
+    --- Inputes
+    - Importance Matrix:        True | False
+    - Importance Matrix Usage:  Default | Algo 1, ...  // Algo used for ZFP Imetrix usage ( To Be Developed )
+    - Type:                     precision | accuracy | rate | quantization
+    - Value:                    <scalar_value> | IQ3_S | ...
+    - Original Size:            <scalar value> [B]
+
+    --- Output
+    - Compressed Size:          <scalar value> [B]
+    - Compression Ratio:        <scalar value>
+    - NumParameters:            <scalar value>
+    - BitsPerWeight:            <scalar value>
+    - Perplexity                <scalar value>       // from llama-perplexity
+    - <Other Benchmarks>          <scalar value>     // from llama-perplexity
+
 # old readme
 [here](org.readme.md)
