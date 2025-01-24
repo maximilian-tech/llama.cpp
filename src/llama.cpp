@@ -18750,15 +18750,15 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     double new_size_ = global_zfp_compressed_size/1024.0/1024.0;
     double CR = old_size / new_size_;
     double bitPerWeight = 8.0*global_zfp_compressed_size / (double)nelements_global;
-    printf("\nZFP_RESULT,type,%s,value,%f,imatrix,%s,original_size(MiB),%8.2f,compressed_size(MiB),%8.2f,compression_ratio,%8.2f,n_elements,%zu,bits_per_weight,%f\n",
-                global_zfp_comp_type, global_zfp_value, used_imatrix,old_size,  new_size_, CR, nelements_global, bitPerWeight);
+    printf("\nZFP_RESULT,type,%s,dim,%i,value,%f,imatrix,%s,original_size(MiB),%8.2f,compressed_size(MiB),%8.2f,compression_ratio,%8.2f,n_elements,%zu,bits_per_weight,%f\n",
+                global_zfp_comp_type, ZFPDIM, global_zfp_value, used_imatrix,old_size,  new_size_, CR, nelements_global, bitPerWeight);
     fflush(stdout);
 #else // Default
     double old_size = total_size_org/1024.0/1024.0;
     double new_size_ = total_size_new/1024.0/1024.0;
     double CR = old_size / new_size_;
     double bitPerWeight = 8.0*total_size_new / (double)nelements_global;
-    printf("\nQUANT_RESULT,type,%s,value,%s,imatrix,%s,original_size(MiB),%8.2f,compressed_size(MiB),%8.2f,compression_ratio,%8.2f,n_elements,%zu,bits_per_weight,%f\n",
+    printf("\nQUANT_RESULT,type,%s,dim,0,value,%s,imatrix,%s,original_size(MiB),%8.2f,compressed_size(MiB),%8.2f,compression_ratio,%8.2f,n_elements,%zu,bits_per_weight,%f\n",
                              "quantization", llama_model_ftype_name(params->ftype).c_str(), used_imatrix, old_size,  total_size_new/1024.0/1024.0  , CR, nelements_global, bitPerWeight);
     fflush(stdout);
 
