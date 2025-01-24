@@ -29,6 +29,455 @@
 
 #define UNUSED GGML_UNUSED
 
+#ifdef GGML_ZFP
+//#include "ht.h"
+
+#include <assert.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+
+
+#define INITIAL_CAPACITY 16  // must not be zero
+
+ht* ht_create(void) {
+    // Allocate space for hash table struct.
+    ht* table = malloc(sizeof(ht));
+    if (table == NULL) {
+        return NULL;
+    }
+    table->length = 0;
+    table->capacity = INITIAL_CAPACITY;
+
+    // Allocate (zero'd) space for entry buckets.
+    table->entries = calloc(table->capacity, sizeof(ht_entry));
+    if (table->entries == NULL) {
+        free(table); // error, free table before we return!
+        return NULL;
+    }
+    return table;
+}
+
+void ht_destroy(ht* table) {
+    // First free allocated keys.
+    for (size_t i = 0; i < table->capacity; i++) {
+        free((void*)table->entries[i].key);
+    }
+
+    // Then free entries array and table itself.
+    free(table->entries);
+    free(table);
+}
+
+#define FNV_OFFSET 14695981039346656037UL
+#define FNV_PRIME 1099511628211UL
+
+// Return 64-bit FNV-1a hash for key (NUL-terminated). See description:
+// https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function
+static uint64_t hash_key(const char* key) {
+    uint64_t hash = FNV_OFFSET;
+    for (const char* p = key; *p; p++) {
+        hash ^= (uint64_t)(unsigned char)(*p);
+        hash *= FNV_PRIME;
+    }
+    return hash;
+}
+
+void* ht_get(ht* table, const char* key) {
+    // AND hash with capacity-1 to ensure it's within entries array.
+    uint64_t hash = hash_key(key);
+    size_t index = (size_t)(hash & (uint64_t)(table->capacity - 1));
+
+    // Loop till we find an empty entry.
+    while (table->entries[index].key != NULL) {
+        if (strcmp(key, table->entries[index].key) == 0) {
+            // Found key, return value.
+            return table->entries[index].value;
+        }
+        // Key wasn't in this slot, move to next (linear probing).
+        index++;
+        if (index >= table->capacity) {
+            // At end of entries array, wrap around.
+            index = 0;
+        }
+    }
+    return NULL;
+}
+
+// Internal function to set an entry (without expanding table).
+static const char* ht_set_entry(ht_entry* entries, size_t capacity,
+        const char* key, void* value, size_t* plength) {
+    // AND hash with capacity-1 to ensure it's within entries array.
+    uint64_t hash = hash_key(key);
+    size_t index = (size_t)(hash & (uint64_t)(capacity - 1));
+
+    // Loop till we find an empty entry.
+    while (entries[index].key != NULL) {
+        if (strcmp(key, entries[index].key) == 0) {
+            // Found key (it already exists), update value.
+            entries[index].value = value;
+            return entries[index].key;
+        }
+        // Key wasn't in this slot, move to next (linear probing).
+        index++;
+        if (index >= capacity) {
+            // At end of entries array, wrap around.
+            index = 0;
+        }
+    }
+
+    // Didn't find key, allocate+copy if needed, then insert it.
+    if (plength != NULL) {
+        key = strdup(key);
+        if (key == NULL) {
+            return NULL;
+        }
+        (*plength)++;
+    }
+    entries[index].key = (char*)key;
+    entries[index].value = value;
+    return key;
+}
+
+// Expand hash table to twice its current size. Return true on success,
+// false if out of memory.
+static bool ht_expand(ht* table) {
+    // Allocate new entries array.
+    size_t new_capacity = table->capacity * 2;
+    if (new_capacity < table->capacity) {
+        return false;  // overflow (capacity would be too big)
+    }
+    ht_entry* new_entries = calloc(new_capacity, sizeof(ht_entry));
+    if (new_entries == NULL) {
+        return false;
+    }
+
+    // Iterate entries, move all non-empty ones to new table's entries.
+    for (size_t i = 0; i < table->capacity; i++) {
+        ht_entry entry = table->entries[i];
+        if (entry.key != NULL) {
+            ht_set_entry(new_entries, new_capacity, entry.key,
+                         entry.value, NULL);
+        }
+    }
+
+    // Free old entries array and update this table's details.
+    free(table->entries);
+    table->entries = new_entries;
+    table->capacity = new_capacity;
+    return true;
+}
+
+const char* ht_set(ht* table, const char* key, void* value) {
+    assert(value != NULL);
+    if (value == NULL) {
+        return NULL;
+    }
+
+    // If length will exceed half of current capacity, expand it.
+    if (table->length >= table->capacity / 2) {
+        if (!ht_expand(table)) {
+            return NULL;
+        }
+    }
+
+    // Set entry and update length.
+    return ht_set_entry(table->entries, table->capacity, key, value,
+                        &table->length);
+}
+
+size_t ht_length(ht* table) {
+    return table->length;
+}
+
+hti ht_iterator(ht* table) {
+    hti it;
+    it._table = table;
+    it._index = 0;
+    return it;
+}
+
+bool ht_next(hti* it) {
+    // Loop till we've hit end of entries array.
+    ht* table = it->_table;
+    while (it->_index < table->capacity) {
+        size_t i = it->_index;
+        it->_index++;
+        if (table->entries[i].key != NULL) {
+            // Found next non-empty item, update iterator key and value.
+            ht_entry entry = table->entries[i];
+            it->key = entry.key;
+            it->value = entry.value;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool ht_serialize_to_file(const ht* table, const char* filename) {
+    if (!table || !filename) {
+        return false;
+    }
+
+    FILE* fp = fopen(filename, "wb");
+    if (!fp) {
+        return false;
+    }
+
+    // 1) Write capacity (size_t).
+    if (fwrite(&table->capacity, sizeof(table->capacity), 1, fp) != 1) {
+        fclose(fp);
+        return false;
+    }
+
+    // 2) Write length (size_t) – number of *non-empty* entries.
+    //    This is just table->length, i.e. how many key/value pairs we have.
+    if (fwrite(&table->length, sizeof(table->length), 1, fp) != 1) {
+        fclose(fp);
+        return false;
+    }
+
+    // 3) Write each slot:
+    //    - A byte (0 or 1) indicating whether the slot is in use.
+    //    - If in use:
+    //         size_t key_len, then the key bytes
+    //         size_t val_len, then the value bytes
+    for (size_t i = 0; i < table->capacity; i++) {
+        const char* key = table->entries[i].key;
+        if (key) {
+            // Slot is in use
+            unsigned char slotInUse = 1;
+            if (fwrite(&slotInUse, sizeof(slotInUse), 1, fp) != 1) {
+                fclose(fp);
+                return false;
+            }
+
+            // Write key
+            size_t key_len = strlen(key);
+            if (fwrite(&key_len, sizeof(key_len), 1, fp) != 1) {
+                fclose(fp);
+                return false;
+            }
+            if (fwrite(key, sizeof(char), key_len, fp) != key_len) {
+                fclose(fp);
+                return false;
+            }
+
+            // Assume value is a C-string for this example
+            const char* val_str = (const char*)table->entries[i].value;
+            size_t val_len = strlen(val_str);
+            if (fwrite(&val_len, sizeof(val_len), 1, fp) != 1) {
+                fclose(fp);
+                return false;
+            }
+            if (fwrite(val_str, sizeof(char), val_len, fp) != val_len) {
+                fclose(fp);
+                return false;
+            }
+        } else {
+            // Slot is empty
+            unsigned char slotInUse = 0;
+            if (fwrite(&slotInUse, sizeof(slotInUse), 1, fp) != 1) {
+                fclose(fp);
+                return false;
+            }
+        }
+    }
+
+    fclose(fp);
+    return true;
+}
+
+/**
+ * Deserialize from file into a newly allocated hash table.
+ * Returns the created `ht*` on success, or NULL on failure.
+ *
+ * For each entry, the function will store a newly allocated copy of
+ * the key and the value (both assumed C-strings in this example).
+ */
+ht* ht_deserialize_from_file(const char* filename) {
+    if (!filename) {
+        return NULL;
+    }
+
+    FILE* fp = fopen(filename, "rb");
+    if (!fp) {
+        return NULL;
+    }
+
+    // 1) Read capacity
+    size_t capacity;
+    if (fread(&capacity, sizeof(capacity), 1, fp) != 1) {
+        fclose(fp);
+        return NULL;
+    }
+
+    // 2) Read length
+    size_t length;
+    if (fread(&length, sizeof(length), 1, fp) != 1) {
+        fclose(fp);
+        return NULL;
+    }
+
+    // Create a new table. We don’t have a public constructor
+    // that lets us pick capacity directly, so we’ll create
+    // with ht_create(), then expand if necessary.
+    ht* new_table = ht_create();
+    if (!new_table) {
+        fclose(fp);
+        return NULL;
+    }
+
+    // If the file had a bigger capacity, we need to expand the
+    // table up to that capacity. Otherwise we might never fit
+    // all entries properly.
+    while (new_table->capacity < capacity) {
+        if (!ht_expand(new_table)) {
+            // Could not expand to desired capacity
+            ht_destroy(new_table);
+            fclose(fp);
+            return NULL;
+        }
+    }
+
+    // 3) Read each slot
+    for (size_t i = 0; i < capacity; i++) {
+        unsigned char slotInUse;
+        if (fread(&slotInUse, sizeof(slotInUse), 1, fp) != 1) {
+            ht_destroy(new_table);
+            fclose(fp);
+            return NULL;
+        }
+
+        if (slotInUse == 1) {
+            // Read key
+            size_t key_len;
+            if (fread(&key_len, sizeof(key_len), 1, fp) != 1) {
+                ht_destroy(new_table);
+                fclose(fp);
+                return NULL;
+            }
+            char* key_buf = (char*)malloc(key_len + 1); // +1 for null terminator
+            if (!key_buf) {
+                ht_destroy(new_table);
+                fclose(fp);
+                return NULL;
+            }
+            if (fread(key_buf, sizeof(char), key_len, fp) != key_len) {
+                free(key_buf);
+                ht_destroy(new_table);
+                fclose(fp);
+                return NULL;
+            }
+            key_buf[key_len] = '\0';
+
+            // Read value (again, assuming C-string)
+            size_t val_len;
+            if (fread(&val_len, sizeof(val_len), 1, fp) != 1) {
+                free(key_buf);
+                ht_destroy(new_table);
+                fclose(fp);
+                return NULL;
+            }
+            char* val_buf = (char*)malloc(val_len + 1);
+            if (!val_buf) {
+                free(key_buf);
+                ht_destroy(new_table);
+                fclose(fp);
+                return NULL;
+            }
+            if (fread(val_buf, sizeof(char), val_len, fp) != val_len) {
+                free(key_buf);
+                free(val_buf);
+                ht_destroy(new_table);
+                fclose(fp);
+                return NULL;
+            }
+            val_buf[val_len] = '\0';
+
+            // Insert into new table
+            ht_set(new_table, key_buf, val_buf);
+            // Note that `ht_set` duplicates the key internally (strdup),
+            // so we might consider free(key_buf) here. But we must check 
+            // how `ht_set_entry()` is implemented:
+            //
+            //   key = strdup(key);
+            //
+            // So indeed, `ht_set` re-strdup's the key. We can free `key_buf`.
+            // The same is not done for `value`, so we keep val_buf as is 
+            // in the table. If you also want to *duplicate* the value inside
+            // the hash table, you'd modify `ht_set_entry` or store a copy 
+            // here. 
+            free(key_buf);
+            // Do NOT free(val_buf) because the hash table is using it directly.
+            // If you want the table to have its own copy, you must handle that. 
+        } else {
+            // slotInUse == 0 means empty slot. Do nothing.
+        }
+    }
+
+    fclose(fp);
+    return new_table;
+}
+
+ht* g_table = NULL;
+
+/**
+ * Initialize the global hash table (allocate it).
+ */
+void init_global_table(void) {
+    if (g_table == NULL) {
+        g_table = ht_create();
+        if (!g_table) {
+            fprintf(stderr, "Failed to create global hash table.\n");
+            exit(EXIT_FAILURE);
+        }
+    }
+}
+
+/**
+ * Destroy (free) the global hash table if it exists.
+ */
+void destroy_global_table(void) {
+    if (g_table) {
+        ht_destroy(g_table);
+        g_table = NULL;
+    }
+}
+
+/**
+ * Save (serialize) the global table to a file.
+ * Returns true on success, false on failure.
+ */
+bool save_global_table(const char* filename) {
+    if (!g_table) {
+        fprintf(stderr, "Global table not initialized.\n");
+        return false;
+    }
+    return ht_serialize_to_file(g_table, filename);
+}
+
+/**
+ * Load (deserialize) from a file into the global table.
+ * If the global table already exists, we destroy it first.
+ * Returns true on success, false on failure.
+ */
+bool load_global_table(const char* filename) {
+    // If already allocated, destroy it to avoid memory leaks.
+    destroy_global_table();
+
+    ht* new_table = ht_deserialize_from_file(filename);
+    if (!new_table) {
+        fprintf(stderr, "Failed to deserialize from %s\n", filename);
+        return false;
+    }
+    g_table = new_table;
+    return true;
+}
+
+#endif
+
+
 // some compilers don't provide _mm256_set_m128i, e.g. gcc 7
 #define MM256_SET_M128I(a, b) _mm256_insertf128_si256(_mm256_castsi128_si256(b), (a), 1)
 
@@ -3112,7 +3561,7 @@ size_t quantize_q6_K(const float * restrict src, void * restrict dst, int64_t nr
     }
     return nrow * row_size;
 }
-
+#define GGML_ZFP 
 #ifdef GGML_ZFP
 /**
  * This function compresses 'src' of size 'n' int 'dst'
@@ -3121,8 +3570,10 @@ size_t global_zfp_compressed_size = 0.;
 int global_skip_quantization = 0;
 char global_zfp_comp_type[16] = "";
 double global_zfp_value = 0.;
+size_t global_index = 0;
+
 static void
-quantize_zfp_impl( const float* restrict src,
+quantize_zfp_impl2( const float* restrict src,
                    void* restrict        dst,
                    int64_t               n,
                    const float *         quant_weights )
@@ -3181,12 +3632,58 @@ quantize_zfp_impl( const float* restrict src,
 //    stream_close(stream);
     //free(buffer);
 }
+// ht_set(g_table,"1","32");
+// char* val = (char*)ht_get(g_table, "1");
+// printf("Value is :'%s'\n",val);
+
+static void
+quantize_zfp_impl( const float* restrict src,
+                    void* restrict        dst,
+                    int64_t               n,
+                    const float *         quant_weights )
+{
+    UNUSED(quant_weights);
+    if(ZFPDBG){assert(n % ZFPBLOCK == 0);}
+    
+    // Assume fixed stride
+    size_t stride = /*n_elements=*/ ZFPBLOCK  * /* stride in bytes per element */ 12  / /*Calc: Bits to Bytes*/ 8 ;
+    size_t num_blocks_per_row = n/ZFPBLOCK;
+    
+    zfp_stream* zfp = zfp_stream_open( NULL );
+    
+    zfp_field* field = ZFP_FIELD_UD( NULL, zfp_type_float, ZFPBLOCK ); // Field ist created only for size estimation ( and to pass type and dimensionality to zfp)
+    bitstream* stream = stream_open( dst, num_blocks_per_row*stride );
+    
+    zfp_stream_set_bit_stream( zfp, stream );        
+    
+    for ( int64_t block_idx = 0; block_idx < num_blocks_per_row; ++block_idx )
+    {
+        ZFP_STREAM_SET_COMPRESSION( zfp, field ); // Field is here just needed to extract type and dimensioanlity
+        size_t bytes    = zfp_stream_maximum_size( zfp, field );
+        assert (bytes < stride);
+       
+        
+        stream_wseek(stream, (bitstream_offset)block_idx*stride*8);
+        
+        size_t zfp_compressed_size_tmp = ZFP_ENCODE_BLOCK( zfp, ( const float* )( src + block_idx * ZFPBLOCK ) ); //+ i * (int64_t)pow(4,ZFPDIM)));
+        zfp_stream_flush( zfp );
+
+
+        #pragma omp atomic
+        global_zfp_compressed_size += zfp_compressed_size_tmp/8;
+
+    }
+    stream_close(stream);
+    zfp_field_free(field);
+    zfp_stream_close(zfp);
+}
+
 
 /**
  * This function decompresses 'src' of size 'n' into 'dst'
  */
 static void
-dequantize_zfp_impl( const void * restrict src,
+dequantize_zfp_impl2( const void * restrict src,
                      float * restrict      dst,
                      int64_t               n )
 {
@@ -3214,6 +3711,44 @@ dequantize_zfp_impl( const void * restrict src,
         ZFP_RW_HEADER( zfp, field, 0 );
         ZFP_DECODE_BLOCK( zfp, dst + i * ZFPBLOCK ); //+ i * (int64_t)pow(4,ZFPDIM)));
         //stream_close(stream);
+    }
+    
+    stream_close(stream);
+    if(ZFPDBG){printf("decompr dst[%f %f %f]\n",dst[0],dst[1],dst[ZFPBLOCK-1]);fflush(stdout);}
+
+    /* clean up */
+    zfp_field_free(field);
+    zfp_stream_close(zfp);
+//    stream_close(stream);
+}
+
+static void
+dequantize_zfp_impl( const void * restrict src,
+                     float * restrict      dst,
+                     int64_t               n )
+{
+    if(ZFPDBG){assert(n % ZFPBLOCK == 0);}
+    
+    size_t stride = /*n_elements=*/ ZFPBLOCK  * /* stride in bytes per element */ 12  / /*Calc: Bits to Bytes*/ 8 ;
+    size_t num_blocks_per_row = n/ZFPBLOCK;
+    
+    zfp_stream* zfp = zfp_stream_open(NULL);
+    
+    zfp_field* field = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK); //, n); //, 4, 4, 4, n / (int64_t)pow(4,d-1));
+    bitstream* stream = stream_open(src, num_blocks_per_row*stride);
+    
+    zfp_stream_set_bit_stream( zfp, stream );    
+    
+    for ( int64_t block_idx = 0; block_idx < n/ZFPBLOCK; ++block_idx )
+    {
+        ZFP_STREAM_SET_COMPRESSION(zfp, field);
+        size_t bytes = zfp_stream_maximum_size(zfp, field);
+        assert (bytes < stride);
+
+        stream_rseek(stream, (bitstream_offset)block_idx*stride*8);
+        
+        ZFP_DECODE_BLOCK( zfp, dst + block_idx * ZFPBLOCK ); //+ block_idx * (int64_t)pow(4,ZFPDIM)));
+
     }
     
     stream_close(stream);
@@ -3254,11 +3789,11 @@ size_t quantize_zfp( const float * restrict src,
                      int64_t                n_per_row,
                      const float *          quant_weights)
 {
-    if ( !quant_weights )
-    {
-        quantize_row_zfp_ref( src, dst, ( int64_t )nrow*n_per_row );
-        return nrow * ggml_row_size( GGML_TYPE_ZFP, n_per_row );
-    }
+    // if ( !quant_weights )
+    // {
+    //     quantize_row_zfp_ref( src, dst, ( int64_t )nrow*n_per_row );
+    //     return nrow * ggml_row_size( GGML_TYPE_ZFP, n_per_row );
+    // }
     size_t row_size = ggml_row_size( GGML_TYPE_ZFP, n_per_row );
     char * qrow = ( char * )dst;
     for ( int64_t row = 0; row < nrow; ++row )
@@ -3279,7 +3814,7 @@ dequantize_row_zfp( const void * restrict src,
 }
 
 void
-ggml_vec_dot_zfp_f32(int                    n,
+ggml_vec_dot_zfp_f32_2(int                    n,
                      float * restrict       s,
                      size_t                 bs,
                      const void * restrict  vx,
@@ -3328,9 +3863,64 @@ ggml_vec_dot_zfp_f32(int                    n,
     *s = sumf;
 }
 
+void
+ggml_vec_dot_zfp_f32(int                    n,
+                     float * restrict       s,
+                     size_t                 bs,
+                     const void * restrict  vx,
+                     size_t                 bx,
+                     const float * restrict vy,
+                     size_t                 by,
+                     int                    nrc )
+{
+    //TODO:for nthread>1 we are in deep shit?! because llama_tensor_quantize_internal created more than one zfp stream
+    assert(nrc == 1);
+    UNUSED(nrc);
+    UNUSED(bs);
+    UNUSED(bx);
+    UNUSED(by);
+    if(ZFPDBG){assert(n % ZFPBLOCK == 0);}
+
+    float sumf = 0.0;
+    float x[ZFPBLOCK];
+    float *y;
+
+    size_t stride = /*n_elements=*/ ZFPBLOCK  * /* stride in bytes per element */ 12  / /*Calc: Bits to Bytes*/ 8 ;
+    size_t num_blocks_per_row = n/ZFPBLOCK;
+    
+    zfp_stream* zfp   = zfp_stream_open(NULL);
+    zfp_field* field  = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK);
+    
+    bitstream* stream = stream_open(vx, num_blocks_per_row*stride);
+    zfp_stream_set_bit_stream(zfp, stream);
+    
+    for (int64_t block_idx = 0; block_idx < n/ZFPBLOCK; ++block_idx)
+    {
+        
+        ZFP_STREAM_SET_COMPRESSION(zfp, field);
+        
+        
+        stream_rseek(stream, (bitstream_offset)block_idx*stride*8);
+        
+        ZFP_DECODE_BLOCK(zfp, x);
+        y = vy + block_idx*ZFPBLOCK;
+        
+        #pragma omp simd safelen(ZFPBLOCK) simdlen(16) reduce(+:sumf)
+        for (int j = 0; j < ZFPBLOCK; ++j)
+        {
+            sumf += x[j] * y[j];
+        }
+    }
+
+    stream_close(stream);
+    zfp_field_free(field);
+    zfp_stream_close(zfp);
+
+    *s = sumf;
+}
 
 void
-ggml_vec_dot_zfp_zfp( int                   n,
+ggml_vec_dot_zfp_zfp_2( int                   n,
                       float * restrict      s,
                       size_t                bs,
                       const void * restrict vx,
@@ -3387,6 +3977,70 @@ ggml_vec_dot_zfp_zfp( int                   n,
     zfp_stream_close(zfpX);
     zfp_stream_close(zfpY);
 //    stream_close(streamX);stream_close(streamY);
+
+    *s = sumf;
+}
+
+
+void
+ggml_vec_dot_zfp_zfp( int                   n,
+                      float * restrict      s,
+                      size_t                bs,
+                      const void * restrict vx,
+                      size_t                bx,
+                      const void * restrict vy,
+                      size_t                by,
+                      int nrc) {
+    assert(nrc == 1);
+    UNUSED(nrc);
+    UNUSED(bs);
+    UNUSED(bx);
+    UNUSED(by);
+    if(ZFPDBG){assert(n % ZFPBLOCK == 0);}
+
+    float sumf = 0.0, x[ZFPBLOCK], y[ZFPBLOCK];
+    
+    size_t stride = /*n_elements=*/ ZFPBLOCK  * /* stride in bytes per element */ 12  / /*Calc: Bits to Bytes*/ 8 ;
+    size_t num_blocks_per_row = n/ZFPBLOCK;
+    
+    zfp_stream* zfpX  = zfp_stream_open(NULL);
+    zfp_field* fieldX = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK); //, n);
+
+    zfp_stream* zfpY  = zfp_stream_open(NULL);
+    zfp_field* fieldY = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK); //, n);
+
+    bitstream* streamX = stream_open(vx, num_blocks_per_row*stride);
+    bitstream* streamY = stream_open(vy, num_blocks_per_row*stride);
+    
+    zfp_stream_set_bit_stream(zfpX, streamX);
+    zfp_stream_set_bit_stream(zfpY, streamY);
+    
+    for (int64_t block_idx = 0; block_idx < n/ZFPBLOCK; ++block_idx)
+    {   
+        ZFP_STREAM_SET_COMPRESSION(zfpX, fieldX);
+        ZFP_STREAM_SET_COMPRESSION(zfpY, fieldY);
+        
+        stream_rseek(streamX, (bitstream_offset)block_idx*stride*8);
+        stream_rseek(streamY, (bitstream_offset)block_idx*stride*8);
+
+        ZFP_DECODE_BLOCK(zfpX, x);
+        ZFP_DECODE_BLOCK(zfpY, y);
+
+        #pragma omp simd safelen(ZFPBLOCK) simdlen(16) reduce(+:sumf)
+        for (int64_t j = 0; j < ZFPBLOCK; ++j)
+        {
+            sumf += x[j] * y[j];
+        }
+
+    }
+    stream_close(streamX);
+    stream_close(streamY);
+
+    zfp_field_free(fieldX);
+    zfp_field_free(fieldY);
+    
+    zfp_stream_close(zfpX);
+    zfp_stream_close(zfpY);
 
     *s = sumf;
 }

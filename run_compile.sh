@@ -8,7 +8,8 @@ set -euo pipefail
 
 #SCOREP_WRAPPER_INSTRUMENTER_FLAGS="--instrument-filter="
 export SCOREP_WRAPPER_INSTRUMENTER_FLAGS="--thread=pthread --instrument-filter=$PWD/initial_scorep_llvm.filter"
-for dim in 1 2 3 4 ; do
+#for dim in 1 2 3 4 ; do
+for dim in 3; do
 	SCOREP_WRAPPER=OFF cmake \
 		-G Ninja \
 		-B build \
@@ -23,8 +24,8 @@ for dim in 1 2 3 4 ; do
 		-DGGML_ZFP_ENABLE=ON \
 		-DBUILD_UTILITIES=OFF \
 		-DZFP_WITH_OPENMP=OFF \
-		-DCMAKE_C_FLAGS_RELEASE="  -O3 -DNDEBUG -march=native -flto=full -mprefer-vector-width=512 -g -gdwarf-4 -fno-omit-frame-pointer" \
-		-DCMAKE_CXX_FLAGS_RELEASE="-O3 -DNDEBUG -march=native -flto=full -mprefer-vector-width=512 -g -gdwarf-4 -fno-omit-frame-pointer" \
+		-DCMAKE_C_FLAGS_RELEASE="  -O3 -march=native -flto=full -fassociative-math -ffp-contract=fast -fvectorize -funsafe-math-optimizations -freciprocal-math -fno-signed-zeros -mprefer-vector-width=512 -g -gdwarf-4 -fno-omit-frame-pointer" \
+		-DCMAKE_CXX_FLAGS_RELEASE="-O3 -march=native -flto=full -fassociative-math -ffp-contract=fast -fvectorize -funsafe-math-optimizations -freciprocal-math -fno-signed-zeros -mprefer-vector-width=512 -g -gdwarf-4 -fno-omit-frame-pointer" \
 		-DZFP_ENABLE_PIC=OFF \
 		-DCMAKE_C_COMPILER=clang \
 		-DCMAKE_CXX_COMPILER=clang++ \

@@ -18529,6 +18529,13 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
     const auto tn = LLM_TN(model.arch);
     new_ofstream(0);
+
+#ifdef GGML_ZFP    
+    global_index = 0;
+    init_global_table();
+    
+#endif
+    
     for (int i = 0; i < ml.n_tensors; ++i) {
 
 #ifdef GGML_ZFP

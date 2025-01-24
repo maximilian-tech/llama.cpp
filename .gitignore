@@ -1,5 +1,5 @@
 # Extensions
-
+/venv*
 *.a
 *.bat
 *.bin

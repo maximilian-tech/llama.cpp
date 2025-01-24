@@ -401,6 +401,19 @@ extern "C" {
     extern int global_skip_quantization;
     extern char global_zfp_comp_type[16];
     extern double global_zfp_value;
+    extern size_t global_index;
+
+void init_global_table(void);
+void destroy_global_table(void);
+bool save_global_table(const char* filename);
+bool load_global_table(const char* filename);
+
+// Hash table structure: create with ht_create, free with ht_destroy.
+typedef struct ht ht;
+
+
+extern ht *g_table;
+
 #endif
     // precision
     enum ggml_prec {

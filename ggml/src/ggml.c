@@ -1083,7 +1083,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
     [GGML_TYPE_ZFP] = {
         .type_name                = "zfp",
         .blck_size                = ZFPBLOCK,
-        .type_size                = sizeof(float), //????  zfp_stream_maximum_size(???, zfp_field_4d(NULL, zfp_type_float, 4, 4, 4, 4)),
+        .type_size                = ZFPBLOCK*12/8,// e //????  zfp_stream_maximum_size(???, zfp_field_4d(NULL, zfp_type_float, 4, 4, 4, 4)),
         .is_quantized             = true,
         .to_float                 = (ggml_to_float_t) dequantize_row_zfp,
         .from_float               = (ggml_from_float_t) quantize_row_zfp,
@@ -3453,21 +3453,21 @@ int64_t ggml_nrows(const struct ggml_tensor * tensor) {
 size_t ggml_nbytes(const struct ggml_tensor * tensor) {
     size_t nbytes;
     size_t blck_size = ggml_blck_size(tensor->type);
-#ifdef GGML_ZFP    
-    if (GGML_TYPE_ZFP == tensor->type) {
-        const int64_t n_per_row = tensor->ne[0];
-        const int64_t nrows = tensor->ne[1];
-        //double rate = ZFPRATE;
-        zfp_field* field = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK); //, n_per_row);
-        zfp_stream* zfp = zfp_stream_open(NULL);
-        ZFP_STREAM_SET_COMPRESSION(zfp, field);  //double ret_rate = zfp_stream_set_rate(zfp, rate, zfp_field_type(field), zfp_field_dimensionality(field), zfp_false);
-        size_t bytes = zfp_stream_maximum_size(zfp, field);
-        zfp_field_free(field);
-        zfp_stream_close(zfp);
-        //return (ne*sizeof(float) < bytes) ? ne*sizeof(float) : bytes ;
-        return bytes * (nrows * n_per_row / ZFPBLOCK); //bytes * nrows;
-    }
-#endif
+// #ifdef GGML_ZFP    
+//     if (GGML_TYPE_ZFP == tensor->type) {
+//         const int64_t n_per_row = tensor->ne[0];
+//         const int64_t nrows = tensor->ne[1];
+//         //double rate = ZFPRATE;
+//         zfp_field* field = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK); //, n_per_row);
+//         zfp_stream* zfp = zfp_stream_open(NULL);
+//         ZFP_STREAM_SET_COMPRESSION(zfp, field);  //double ret_rate = zfp_stream_set_rate(zfp, rate, zfp_field_type(field), zfp_field_dimensionality(field), zfp_false);
+//         size_t bytes = zfp_stream_maximum_size(zfp, field);
+//         zfp_field_free(field);
+//         zfp_stream_close(zfp);
+//         //return (ne*sizeof(float) < bytes) ? ne*sizeof(float) : bytes ;
+//         return bytes * (nrows * n_per_row / ZFPBLOCK); //bytes * nrows;
+//     }
+// #endif
     if (blck_size == 1) {
         nbytes = ggml_type_size(tensor->type);
         for (int i = 0; i < GGML_MAX_DIMS; ++i) {
@@ -3488,36 +3488,44 @@ size_t ggml_nbytes_pad(const struct ggml_tensor * tensor) {
     return GGML_PAD(ggml_nbytes(tensor), GGML_MEM_ALIGN);
 }
 
+// Should return the Number of Elements in a block
 int64_t ggml_blck_size(enum ggml_type type) {
     return type_traits[type].blck_size;
 }
 
+// Size of the compressed row
 size_t ggml_row_size(enum ggml_type type, int64_t ne) {
     assert(ne % ggml_blck_size(type) == 0);
-#ifdef GGML_ZFP    
-    if (GGML_TYPE_ZFP == type) {
-        //double rate = ZFPRATE;
-        zfp_field* field = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK); //, ne);
-        zfp_stream* zfp = zfp_stream_open(NULL);
-        ZFP_STREAM_SET_COMPRESSION(zfp, field);  //double ret_rate = zfp_stream_set_rate(zfp, rate, zfp_field_type(field), zfp_field_dimensionality(field), zfp_false);
-        size_t bytes = zfp_stream_maximum_size(zfp, field);
-        zfp_field_free(field);
-        zfp_stream_close(zfp);
-        //return (ne*sizeof(float) < bytes) ? ne*sizeof(float) : bytes ;
-        //if(ZFPDBG){printf("returning %llu (%llu,%llu,%llu)\n", bytes * (ne / ZFPBLOCK), (uint64)bytes, (uint64)ne, (uint64)ZFPBLOCK);fflush(stdout);}
-        return bytes * (ne / ZFPBLOCK); //bytes;
-    }
-#endif
+// #ifdef GGML_ZFP    
+//     if (GGML_TYPE_ZFP == type) {
+//         #if 0
+//         //double rate = ZFPRATE;
+//         zfp_field* field = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK); //, ne);
+//         zfp_stream* zfp = zfp_stream_open(NULL);
+//         ZFP_STREAM_SET_COMPRESSION(zfp, field);  //double ret_rate = zfp_stream_set_rate(zfp, rate, zfp_field_type(field), zfp_field_dimensionality(field), zfp_false);
+//         size_t bytes = zfp_stream_maximum_size(zfp, field);
+//         zfp_field_free(field);
+//         zfp_stream_close(zfp);
+//         //return (ne*sizeof(float) < bytes) ? ne*sizeof(float) : bytes ;
+//         //if(ZFPDBG){printf("returning %llu (%llu,%llu,%llu)\n", bytes * (ne / ZFPBLOCK), (uint64)bytes, (uint64)ne, (uint64)ZFPBLOCK);fflush(stdout);}
+//         return bytes * (ne / ZFPBLOCK); //bytes;
+//         #endif
+//         //size_t stride = /*n_elements=*/ ZFPBLOCK  * /* stride in bytes per element */ 12  / /*Calc: Bits to Bytes*/ 8 ;
+//         size_t num_blocks_per_row = ne/ZFPBLOCK;
+//         return num_blocks_per_row*stride;
+//     }
+// #endif
     return ggml_type_size(type)*ne/ggml_blck_size(type);
 }
 
+// Should return the size of the compressed block. --> Unknown + Dynamic. Can only specify upper bound
 size_t ggml_type_size(enum ggml_type type) {
-#ifdef GGML_ZFP
-    if (GGML_TYPE_ZFP == type)
-    {
-        return ggml_row_size(type, ZFPBLOCK);
-    }
-#endif    
+// #ifdef GGML_ZFP
+//     if (GGML_TYPE_ZFP == type)
+//     {
+//         return ggml_row_size(type, ZFPBLOCK);
+//     }
+//#endif    
     return type_traits[type].type_size;
 }
 
