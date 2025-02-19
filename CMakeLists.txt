@@ -107,6 +107,11 @@ if(GGML_ZFP_ENABLE)
     # Append GGML_ZFP_DIMENSION to the executable suffix
     string(APPEND CMAKE_EXECUTABLE_SUFFIX ".dim_${GGML_ZFP_DIMENSION}")
 
+    #add_library(uthash INTERFACE)
+    #target_sources(uthash INTERFACE uthash/src/uthash.h)
+    add_compile_options("-I${CMAKE_CURRENT_LIST_DIR}/uthash/src/")
+    #link_libraries(uthash)
+
 endif()
 
 # change the default for these ggml options

@@ -22,7 +22,7 @@ echo "" > $OUTPUT_SUMMARY
 #for DIM in 4 3 2 1 ; do
 for DIM in 3 ; do
     #for rate in 3.50 4.00 4.50 4.65 5.00 6.00 8.00 ; do
-    for rate in 4.50 ; do
+    for rate in 8.50 ; do
 
         echo $rate
         export ZFP_RATE=$rate

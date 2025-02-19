@@ -24,8 +24,8 @@ for dim in 3; do
 		-DGGML_ZFP_ENABLE=ON \
 		-DBUILD_UTILITIES=OFF \
 		-DZFP_WITH_OPENMP=OFF \
-		-DCMAKE_C_FLAGS_RELEASE="  -O3 -march=native -flto=full -fassociative-math -ffp-contract=fast -fvectorize -funsafe-math-optimizations -freciprocal-math -fno-signed-zeros -mprefer-vector-width=512 -g -gdwarf-4 -fno-omit-frame-pointer" \
-		-DCMAKE_CXX_FLAGS_RELEASE="-O3 -march=native -flto=full -fassociative-math -ffp-contract=fast -fvectorize -funsafe-math-optimizations -freciprocal-math -fno-signed-zeros -mprefer-vector-width=512 -g -gdwarf-4 -fno-omit-frame-pointer" \
+		-DCMAKE_C_FLAGS_RELEASE="  -O3 -march=native -flto=full -mprefer-vector-width=512 -g -gdwarf-4 -fno-omit-frame-pointer -fassociative-math -ffp-contract=fast -fvectorize -funsafe-math-optimizations -freciprocal-math -fno-signed-zeros " \
+		-DCMAKE_CXX_FLAGS_RELEASE="-O3 -march=native -flto=full -mprefer-vector-width=512 -g -gdwarf-4 -fno-omit-frame-pointer -fassociative-math -ffp-contract=fast -fvectorize -funsafe-math-optimizations -freciprocal-math -fno-signed-zeros " \
 		-DZFP_ENABLE_PIC=OFF \
 		-DCMAKE_C_COMPILER=clang \
 		-DCMAKE_CXX_COMPILER=clang++ \
@@ -35,6 +35,8 @@ for dim in 3; do
 		--fresh #\
 	#	-DCMAKE_C_COMPILER=scorep-clang \
 	#	-DCMAKE_CXX_COMPILER=scorep-clang++ 
+
+# -fassociative-math -ffp-contract=fast -fvectorize -funsafe-math-optimizations -freciprocal-math -fno-signed-zeros 
 
 	cmake --build build
 	#pushd build

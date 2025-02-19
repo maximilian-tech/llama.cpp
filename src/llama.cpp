@@ -18532,7 +18532,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
 #ifdef GGML_ZFP    
     global_index = 0;
-    init_global_table();
+    //init_global_table();
     
 #endif
     
