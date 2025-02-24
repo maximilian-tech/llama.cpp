@@ -1083,12 +1083,17 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
     [GGML_TYPE_ZFP] = {
         .type_name                = "zfp",
         .blck_size                = ZFPBLOCK,
-        .type_size                = ZFPBLOCK*12/8,// e //????  zfp_stream_maximum_size(???, zfp_field_4d(NULL, zfp_type_float, 4, 4, 4, 4)),
+        .type_size                = ZFPBLOCK*12/8,// allows for 12  bits/per/weight  //????  zfp_stream_maximum_size(???, zfp_field_4d(NULL, zfp_type_float, 4, 4, 4, 4)),
         .is_quantized             = true,
-        .to_float                 = (ggml_to_float_t) dequantize_row_zfp,
+        /*.to_float                 = (ggml_to_float_t) dequantize_row_zfp,
         .from_float               = (ggml_from_float_t) quantize_row_zfp,
         .from_float_ref           = (ggml_from_float_t) quantize_row_zfp_ref,
-        .vec_dot                  = (ggml_vec_dot_t) ggml_vec_dot_zfp_f32,
+        .vec_dot                  = (ggml_vec_dot_t) ggml_vec_dot_zfp_f32,*/
+        .to_float                 = NULL,
+        .from_float               = NULL,
+        .from_float_ref           = NULL,
+        .vec_dot                  = NULL,
+        
         .vec_dot_type             = GGML_TYPE_F32,
         .nrows                    = 1,
     },
@@ -21995,7 +22000,10 @@ size_t ggml_quantize_chunk(
     size_t result = 0;
 
     switch (type) {
-#ifdef GGML_ZFP        
+#ifdef GGML_ZFP
+#   ifdef GGML_ZFP_IMATRIX
+        // Maybe here another logic if of indexing into the large matrices and setting source/target
+#   endif
         case GGML_TYPE_ZFP:     result = quantize_zfp(src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
 #endif
         case GGML_TYPE_Q4_0:    result = quantize_q4_0(src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
@@ -22047,10 +22055,11 @@ size_t ggml_quantize_chunk(
     // Increment gloabal size if not already happend within ZFP 'quantization'
     if ( type != GGML_TYPE_ZFP)
     {
-        #pragma omp critical
-        {
-            global_zfp_compressed_size += result;
-        }
+        #pragma omp atomic
+        global_zfp_compressed_size += result;
+        #pragma omp atomic
+        global_index++;
+        
     }
 #endif
     

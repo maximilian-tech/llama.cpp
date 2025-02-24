@@ -3112,7 +3112,7 @@ size_t quantize_q6_K(const float * restrict src, void * restrict dst, int64_t nr
     }
     return nrow * row_size;
 }
-#define GGML_ZFP 
+
 #ifdef GGML_ZFP
 /**
  * This function compresses 'src' of size 'n' int 'dst'
@@ -3122,6 +3122,8 @@ int global_skip_quantization = 0;
 char global_zfp_comp_type[16] = "";
 double global_zfp_value = 0.;
 size_t global_index = 0;
+
+
 
 static void
 quantize_zfp_impl2( const float* restrict src,
@@ -3158,7 +3160,9 @@ quantize_zfp_impl2( const float* restrict src,
 
         #pragma omp atomic
         global_zfp_compressed_size += zfp_compressed_size_tmp/8;
-
+        #pragma omp atomic
+        global_index++;
+           
         //stream_close(stream);
     }
 
@@ -3189,11 +3193,11 @@ quantize_zfp_impl2( const float* restrict src,
 
 static void
 quantize_zfp_impl( const float* restrict src,
-                    void* restrict        dst,
-                    int64_t               n,
-                    const float *         quant_weights )
+                    void* restrict       dst,
+                    int64_t              n,
+                    const float *        quant_weights )
 {
-    UNUSED(quant_weights);
+    //UNUSED(quant_weights);
     if(ZFPDBG){assert(n % ZFPBLOCK == 0);}
     
     // Assume fixed stride
@@ -3215,13 +3219,15 @@ quantize_zfp_impl( const float* restrict src,
        
         
         stream_wseek(stream, (bitstream_offset)block_idx*stride*8);
-        
+        //write Header
+
         size_t zfp_compressed_size_tmp = ZFP_ENCODE_BLOCK( zfp, ( const float* )( src + block_idx * ZFPBLOCK ) ); //+ i * (int64_t)pow(4,ZFPDIM)));
         zfp_stream_flush( zfp );
 
 
         #pragma omp atomic
         global_zfp_compressed_size += zfp_compressed_size_tmp/8;
+        
 
     }
     stream_close(stream);
@@ -3347,6 +3353,11 @@ size_t quantize_zfp( const float * restrict src,
     // }
     size_t row_size = ggml_row_size( GGML_TYPE_ZFP, n_per_row );
     char * qrow = ( char * )dst;
+    printf("\n----> nrow: %li , n_per_row: %li, has_quantWeight:'%s'\n", nrow, n_per_row, quant_weights ?"true":"false");
+    fflush(stdout);
+    // Here som logic to 
+    #pragma omp atomic    
+    global_index++;
     for ( int64_t row = 0; row < nrow; ++row )
     {
         quantize_zfp_impl( src, qrow, n_per_row, quant_weights );

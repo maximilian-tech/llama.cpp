@@ -191,7 +191,7 @@ extern size_t global_index;
         strncpy(global_zfp_comp_type, "rate", sizeof(global_zfp_comp_type) - 1); \
         global_zfp_value = rate; \
         if (rate < 0.0) { zfp_stream_set_reversible(zfp); }                \
-         else { \
+        else { \
             __attribute__((unused)) double __ret = \
                 zfp_stream_set_rate(zfp, \
                                     rate, \
