@@ -14,10 +14,11 @@ set euxo -pipefail
 
 PREFIX="./Meta-Llama-3-8B/Meta-Llama-3-8B"
 DIM="4"
-export NCPUS=8
+export NCPUS=1
 
 OUTPUT_SUMMARY=log.summary
 echo "" > $OUTPUT_SUMMARY
+
 
 #for DIM in 4 3 2 1 ; do
 for DIM in 3 ; do
@@ -25,11 +26,16 @@ for DIM in 3 ; do
     for rate in 8.50 ; do
 
         echo $rate
-        export ZFP_RATE=$rate
-        OUTPUT_NAME="from_ZFP-RATE_${ZFP_RATE}_dim_${DIM}"
-        ./build/bin/llama-quantize.rate.dim_${DIM} ${PREFIX}-F16.gguf  ${PREFIX}-ZFP_tmp.gguf ZFP  ${NCPUS} | tee log.${OUTPUT_NAME}
+        export ZFP_RATE_MIN=$(echo "$rate - 2" | bc)
+        #export ZFP_RATE_MIN=$rate
+        export ZFP_RATE_MAX=$rate
+        OUTPUT_NAME="from_ZFP-RATE_${ZFP_RATE_MIN}-${ZFP_RATE_MAX}_dim_${DIM}"
+
+        ./build/bin/llama-quantize.rate.dim_${DIM} --imatrix ${PREFIX}-imatrix.dat ${PREFIX}-F16.gguf  ${PREFIX}-ZFP_tmp.gguf ZFP  ${NCPUS} | tee log.${OUTPUT_NAME}
+        
+        #./build/bin/llama-quantize.rate.dim_${DIM} ${PREFIX}-F16.gguf  ${PREFIX}-ZFP_tmp.gguf ZFP  ${NCPUS} | tee log.${OUTPUT_NAME}
         ./build/bin/llama-quantize.rate.dim_${DIM} --allow-requantize  ${PREFIX}-ZFP_tmp.gguf ${PREFIX}-F16_${OUTPUT_NAME}_new.gguf F16 ${NCPUS}
-        grep "^ZFP_RESULT" log.${OUTPUT_NAME} >> $OUTPUT_SUMMARY
+       # grep "^ZFP_RESULT" log.${OUTPUT_NAME} >> $OUTPUT_SUMMARY
         exit 0
     done
 done

@@ -3120,7 +3120,8 @@ size_t quantize_q6_K(const float * restrict src, void * restrict dst, int64_t nr
 size_t global_zfp_compressed_size = 0.;
 int global_skip_quantization = 0;
 char global_zfp_comp_type[16] = "";
-double global_zfp_value = 0.;
+double global_zfp_value_min = 0.;
+double global_zfp_value_max = 0.;
 size_t global_index = 0;
 
 
@@ -3138,7 +3139,7 @@ quantize_zfp_impl2( const float* restrict src,
     zfp_field* field = ZFP_FIELD_UD( NULL, zfp_type_float, ZFPBLOCK ); //, n); //, 4, 4, 4, n / (int64_t)pow(4,d-1));
     /* allocate storage for compressed bit stream */
     zfp_stream* zfp = zfp_stream_open( NULL );
-    ZFP_STREAM_SET_COMPRESSION( zfp, field ); //double ret_rate = zfp_stream_set_rate(zfp, rate, zfp_field_type(field), zfp_field_dimensionality(field), zfp_false);
+    ZFP_STREAM_SET_COMPRESSION( zfp, field , NULL); //double ret_rate = zfp_stream_set_rate(zfp, rate, zfp_field_type(field), zfp_field_dimensionality(field), zfp_false);
     size_t bytes    = zfp_stream_maximum_size( zfp, field );
     //void* buffer = (void*)malloc(bytes); //TODO: remove temp buffer and work with dst directly
 //    bitstream* stream = stream_open(dst/*buffer*/, bytes);
@@ -3195,7 +3196,7 @@ static void
 quantize_zfp_impl( const float* restrict src,
                     void* restrict       dst,
                     int64_t              n,
-                    const float *        quant_weights )
+                    const float *        quant_weight ) // Only 1 quant weight
 {
     //UNUSED(quant_weights);
     if(ZFPDBG){assert(n % ZFPBLOCK == 0);}
@@ -3213,22 +3214,24 @@ quantize_zfp_impl( const float* restrict src,
     
     for ( int64_t block_idx = 0; block_idx < num_blocks_per_row; ++block_idx )
     {
-        ZFP_STREAM_SET_COMPRESSION( zfp, field ); // Field is here just needed to extract type and dimensioanlity
-        size_t bytes    = zfp_stream_maximum_size( zfp, field );
-        assert (bytes < stride);
-       
+        ZFP_STREAM_SET_COMPRESSION( zfp, field, quant_weight ); // Field is here just needed to extract type and dimensioanlity
+        //size_t bytes    = zfp_stream_maximum_size( zfp, field );
+        
         
         stream_wseek(stream, (bitstream_offset)block_idx*stride*8);
         //write Header
-
+        size_t header_size = zfp_write_header(zfp, field, ZFP_HEADER_MODE|ZFP_HEADER_MAGIC);
+        assert(header_size > 0 && "ZFP Header write failed!");
+        
         size_t zfp_compressed_size_tmp = ZFP_ENCODE_BLOCK( zfp, ( const float* )( src + block_idx * ZFPBLOCK ) ); //+ i * (int64_t)pow(4,ZFPDIM)));
+        assert(zfp_compressed_size_tmp > 0 && "ZFP Compression failed!");
+        
         zfp_stream_flush( zfp );
 
+        assert (((zfp_compressed_size_tmp + header_size) < (stride*8) ) && "Exceeded max. available space");
 
         #pragma omp atomic
-        global_zfp_compressed_size += zfp_compressed_size_tmp/8;
-        
-
+        global_zfp_compressed_size += zfp_compressed_size_tmp/8 + header_size/8;
     }
     stream_close(stream);
     zfp_field_free(field);
@@ -3249,7 +3252,7 @@ dequantize_zfp_impl2( const void * restrict src,
     
     zfp_field* field = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK); //, n); //, 4, 4, 4, n / (int64_t)pow(4,d-1));
     zfp_stream* zfp = zfp_stream_open(NULL);
-    ZFP_STREAM_SET_COMPRESSION(zfp, field);
+    ZFP_STREAM_SET_COMPRESSION(zfp, field, NULL);
     size_t bytes = zfp_stream_maximum_size(zfp, field);//bitstream* stream = stream_open(src/*buffer*/, bytes);zfp_stream_set_bit_stream(zfp, stream);
 //    ZFP_STREAM_SET_COMPRESSION(zfp, field); //*double ret_rate = zfp_stream_set_rate(zfp, rate, zfp_field_type(field), zfp_field_dimensionality(field), zfp_false);
 //    zfp_stream_rewind(zfp);//TODO???needed???
@@ -3284,6 +3287,10 @@ dequantize_zfp_impl( const void * restrict src,
                      float * restrict      dst,
                      int64_t               n )
 {
+    // Problem:
+    // This is via `to_float`. But in the call path of `llama_tensor_dequantize_internal` this is called on the complete tensor,
+    // for one can choose the iteration itself!
+    
     if(ZFPDBG){assert(n % ZFPBLOCK == 0);}
     
     size_t stride = /*n_elements=*/ ZFPBLOCK  * /* stride in bytes per element */ 12  / /*Calc: Bits to Bytes*/ 8 ;
@@ -3291,21 +3298,27 @@ dequantize_zfp_impl( const void * restrict src,
     
     zfp_stream* zfp = zfp_stream_open(NULL);
     
-    zfp_field* field = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK); //, n); //, 4, 4, 4, n / (int64_t)pow(4,d-1));
+    //zfp_field* field = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK); //, n); //, 4, 4, 4, n / (int64_t)pow(4,d-1));
+    zfp_field* field = zfp_field_alloc();
     bitstream* stream = stream_open(src, num_blocks_per_row*stride);
     
     zfp_stream_set_bit_stream( zfp, stream );    
-    
+
     for ( int64_t block_idx = 0; block_idx < n/ZFPBLOCK; ++block_idx )
     {
-        ZFP_STREAM_SET_COMPRESSION(zfp, field);
-        size_t bytes = zfp_stream_maximum_size(zfp, field);
-        assert (bytes < stride);
-
         stream_rseek(stream, (bitstream_offset)block_idx*stride*8);
         
-        ZFP_DECODE_BLOCK( zfp, dst + block_idx * ZFPBLOCK ); //+ block_idx * (int64_t)pow(4,ZFPDIM)));
+        size_t header_size = zfp_read_header(zfp, field, ZFP_HEADER_MODE|ZFP_HEADER_MAGIC);
+        assert(header_size > 0 && "Could not read ZFP Header");
+        //ZFP_STREAM_SET_COMPRESSION(zfp, field); // Set via Header
+        // size_t bytes = zfp_stream_maximum_size(zfp, field);
+        // assert (bytes < stride);
+        
+        // Directly decode into the destination buffer
+        size_t zfp_compressed_size_tmp = ZFP_DECODE_BLOCK( zfp, dst + block_idx * ZFPBLOCK ); //+ block_idx * (int64_t)pow(4,ZFPDIM)));
+        assert(zfp_compressed_size_tmp > 0 && "ZFP Deompression failed!");
 
+        //zfp_stream_align(zfp);
     }
     
     stream_close(stream);
@@ -3314,7 +3327,6 @@ dequantize_zfp_impl( const void * restrict src,
     /* clean up */
     zfp_field_free(field);
     zfp_stream_close(zfp);
-//    stream_close(stream);
 }
 
 /**
@@ -3338,32 +3350,164 @@ void quantize_row_zfp( const float * restrict src,
 }
 
 /**
+ * Special wrapper function for ZFP + IMATRIX
+ */
+
+size_t dequantize_zfp(const void * src,
+                      float *      dst,
+                      int64_t nrow,
+                      int64_t n_per_row )
+{
+    
+    printf("\n----> nrow: %li , n_per_row: %li", nrow, n_per_row);fflush(stdout);
+    #ifdef GGML_ZFP_IMATRIX
+        size_t tile_dim_0 = 16; // Tile width
+        size_t tile_dim_1 = ZFPBLOCK; // Tile height
+
+        size_t num_tiles_dim_0 = n_per_row / tile_dim_0;
+        size_t num_tiles_dim_1 = nrow / tile_dim_1;
+
+        size_t res_tiles_dim_0 = n_per_row % tile_dim_0;
+        size_t res_tiles_dim_1 = nrow % tile_dim_1;
+
+        assert(res_tiles_dim_0 == 0);
+        assert(res_tiles_dim_1 == 0);
+
+        size_t tiled_column_size = ggml_row_size(GGML_TYPE_ZFP, ZFPBLOCK);
+        char *qrow = (char *)src;
+        int cnt = 0;
+        for (size_t outer_dim_1 = 0; outer_dim_1 < num_tiles_dim_1; ++outer_dim_1)
+        {
+            for (size_t outer_dim_0 = 0; outer_dim_0 < num_tiles_dim_0; ++outer_dim_0)
+            {
+                for (int64_t column = 0; column < tile_dim_0; ++column)
+                {
+                    float *tmp = (float *)malloc(tile_dim_1 * sizeof(float));
+                    if (!tmp) { perror("malloc failed"); exit(EXIT_FAILURE); }
+                    
+                    //printf("\nStarting iteration %i\n",cnt++);fflush(stdout);
+                    
+                    dequantize_zfp_impl(qrow, tmp, tile_dim_1);
+                    
+                    for (int i = 0; i < tile_dim_1; ++i)
+                    {
+                        dst[i * n_per_row + column + outer_dim_0 * tile_dim_0] = tmp[i];
+                    }
+                    
+                    free(tmp);
+
+                    qrow += tiled_column_size; 
+                }
+            }
+            dst += tile_dim_1 * n_per_row;
+        }
+        printf(" <----\n", nrow, n_per_row);fflush(stdout);
+    #else
+        size_t row_size = ggml_row_size(GGML_TYPE_ZFP, n_per_row);
+        char *qrow = (char *)dst;
+        for (int64_t row = 0; row < nrow; ++row)
+        {
+            dequantize_zfp_impl(src, qrow, n_per_row, quant_weights);
+            src += (char*)row_size;
+            qrow += n_per_row;
+        }
+    #endif
+}
+
+/**
  * Entry Point for 'quantize_zfp'
  */
-size_t quantize_zfp( const float * restrict src,
-                     void * restrict        dst,
-                     int64_t                nrow,
-                     int64_t                n_per_row,
-                     const float *          quant_weights)
+
+
+size_t quantize_zfp(const float *restrict src,
+                    void *restrict dst,
+                    int64_t nrow,
+                    int64_t n_per_row,
+                    const float *quant_weights)
 {
-    // if ( !quant_weights )
-    // {
-    //     quantize_row_zfp_ref( src, dst, ( int64_t )nrow*n_per_row );
-    //     return nrow * ggml_row_size( GGML_TYPE_ZFP, n_per_row );
-    // }
-    size_t row_size = ggml_row_size( GGML_TYPE_ZFP, n_per_row );
-    char * qrow = ( char * )dst;
-    printf("\n----> nrow: %li , n_per_row: %li, has_quantWeight:'%s'\n", nrow, n_per_row, quant_weights ?"true":"false");
+    printf("\n----> nrow: %li , n_per_row: %li, has_quantWeight:'%s'\n", nrow, n_per_row, quant_weights ? "true" : "false");
     fflush(stdout);
-    // Here som logic to 
+
     #pragma omp atomic    
     global_index++;
-    for ( int64_t row = 0; row < nrow; ++row )
-    {
-        quantize_zfp_impl( src, qrow, n_per_row, quant_weights );
+    
+    size_t row_size = ggml_row_size(GGML_TYPE_ZFP, n_per_row);
+    
+    #ifdef GGML_ZFP_IMATRIX
+        size_t tile_dim_0 = 16; // Tile width
+        size_t tile_dim_1 = ZFPBLOCK; // Tile height
+
+        size_t num_tiles_dim_0 = n_per_row / tile_dim_0;
+        size_t num_tiles_dim_1 = nrow / tile_dim_1;
+
+        size_t res_tiles_dim_0 = n_per_row % tile_dim_0;
+        size_t res_tiles_dim_1 = nrow % tile_dim_1;
+
+        assert(res_tiles_dim_0 == 0);
+        assert(res_tiles_dim_1 == 0);
+
+        size_t tiled_column_size = ggml_row_size(GGML_TYPE_ZFP, ZFPBLOCK);
+        char *qrow = (char *)dst;
+        
+        float quant_weight_min = FLT_MAX;
+        float quant_weight_max = FLT_MIN;
+        if(quant_weights)
+        {
+            for (int i = 0; i < n_per_row; ++i)
+            {
+                float tmp = quant_weights[i];
+                if(tmp < quant_weight_min ) quant_weight_min = tmp;
+                if(tmp > quant_weight_max ) quant_weight_max = tmp;
+            }
+        }   
+        
+        for (size_t outer_dim_1 = 0; outer_dim_1 < num_tiles_dim_1; ++outer_dim_1)
+        {
+            for (size_t outer_dim_0 = 0; outer_dim_0 < num_tiles_dim_0; ++outer_dim_0)
+            {
+                for (int64_t column = 0; column < tile_dim_0; ++column)
+                {
+                    float *tmp = (float *)malloc(tile_dim_1 * sizeof(float));
+                    if (!tmp) { perror("malloc failed"); exit(EXIT_FAILURE); }
+
+                    for (int i = 0; i < tile_dim_1; ++i)
+                    {
+                        tmp[i] = src[i * n_per_row + column + outer_dim_0 * tile_dim_0];
+                    }
+                    if(quant_weights)
+                    {
+                        float quant_weight = quant_weights[column + outer_dim_0 * tile_dim_0];
+                        float quant_weight_scaled = 0.5;
+                        // rescale quant_weight to be between 0 (unimportant) and 1(important)
+                        if (fabs(quant_weight_max - quant_weight_min) > 0.0000001) {
+                            quant_weight_scaled = (quant_weight - quant_weight_min) / (quant_weight_max - quant_weight_min);
+                        }
+                        quantize_zfp_impl(tmp, qrow, tile_dim_1, &quant_weight_scaled);
+                    } 
+                    else
+                    {
+                        quantize_zfp_impl(tmp, qrow, tile_dim_1, NULL);
+                    }
+                    
+                    free(tmp);
+
+                    qrow += tiled_column_size; 
+                }
+            }
+            src += tile_dim_1 * n_per_row;
+        }
+        
+    #else    
+        size_t row_size = ggml_row_size(GGML_TYPE_ZFP, n_per_row);
+        char *qrow = (char *)dst;
+        for (int64_t row = 0; row < nrow; ++row)
+        {
+        quantize_zfp_impl(src, qrow, n_per_row, quant_weights);
         src += n_per_row;
         qrow += row_size;
-    }
+        }
+        
+    #endif    
     return nrow * row_size;
 }
 
@@ -3399,7 +3543,7 @@ ggml_vec_dot_zfp_f32_2(int                    n,
 
     zfp_field* field  = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK);
     zfp_stream* zfp   = zfp_stream_open(NULL);
-    ZFP_STREAM_SET_COMPRESSION(zfp, field);
+    ZFP_STREAM_SET_COMPRESSION(zfp, field, NULL);
     size_t bytes      = zfp_stream_maximum_size(zfp, field);
 
     bitstream* stream = stream_open(vx, bytes);
@@ -3459,7 +3603,7 @@ ggml_vec_dot_zfp_f32(int                    n,
     for (int64_t block_idx = 0; block_idx < n/ZFPBLOCK; ++block_idx)
     {
 
-        ZFP_STREAM_SET_COMPRESSION(zfp, field);
+        ZFP_STREAM_SET_COMPRESSION(zfp, field, NULL);
         stream_rseek(stream, (bitstream_offset)block_idx*stride*8);
 
         ZFP_DECODE_BLOCK(zfp, x);
@@ -3499,10 +3643,10 @@ ggml_vec_dot_zfp_zfp_2( int                   n,
     float sumf = 0.0, x[ZFPBLOCK], y[ZFPBLOCK];
 
     zfp_field* fieldX = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK); //, n);
-    zfp_stream* zfpX  = zfp_stream_open(NULL);ZFP_STREAM_SET_COMPRESSION(zfpX, fieldX);
+    zfp_stream* zfpX  = zfp_stream_open(NULL);ZFP_STREAM_SET_COMPRESSION(zfpX, fieldX, NULL);
     size_t bytesX     = zfp_stream_maximum_size(zfpX, fieldX);//bitstream* streamX = stream_open(vx/*buffer*/, bytesX);zfp_stream_set_bit_stream(zfpX, streamX);
     zfp_field* fieldY = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK); //, n);
-    zfp_stream* zfpY  = zfp_stream_open(NULL);ZFP_STREAM_SET_COMPRESSION(zfpY, fieldY);
+    zfp_stream* zfpY  = zfp_stream_open(NULL);ZFP_STREAM_SET_COMPRESSION(zfpY, fieldY,NULL);
     size_t bytesY     = zfp_stream_maximum_size(zfpY, fieldY);//bitstream* streamY = stream_open(vy/*buffer*/, bytesY);zfp_stream_set_bit_stream(zfpY, streamY);
 //    zfp_stream_rewind(zfpX);zfp_stream_rewind(zfpY);
 //    ZFP_RW_HEADER(zfpX, fieldX, 0);ZFP_RW_HEADER(zfpY, fieldY, 0);
@@ -3577,8 +3721,8 @@ ggml_vec_dot_zfp_zfp( int                   n,
     
     for (int64_t block_idx = 0; block_idx < n/ZFPBLOCK; ++block_idx)
     {   
-        ZFP_STREAM_SET_COMPRESSION(zfpX, fieldX);
-        ZFP_STREAM_SET_COMPRESSION(zfpY, fieldY);
+        ZFP_STREAM_SET_COMPRESSION(zfpX, fieldX,NULL);
+        ZFP_STREAM_SET_COMPRESSION(zfpY, fieldY,NULL);
         
         stream_rseek(streamX, (bitstream_offset)block_idx*stride*8);
         stream_rseek(streamY, (bitstream_offset)block_idx*stride*8);

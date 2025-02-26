@@ -17897,7 +17897,15 @@ static void llama_tensor_dequantize_internal(
         } else if (tensor->type == GGML_TYPE_BF16) {
             ggml_bf16_to_fp32_row((ggml_bf16_t *)tensor->data, f32_output, nelements);
         } else if (ggml_is_quantized(tensor->type)) {
-            qtype->to_float(tensor->data, f32_output, nelements);
+
+
+        if(tensor->type == GGML_TYPE_ZFP)
+        {
+            dequantize_zfp(tensor->data, f32_output, /*nrows*/ tensor->ne[1], /*n_per_row*/ tensor->ne[0]);
+        }
+
+        qtype->to_float(tensor->data, f32_output, nelements);
+            
         } else {
             GGML_ABORT("fatal error"); // unreachable
         }
@@ -17933,6 +17941,13 @@ static void llama_tensor_dequantize_internal(
             } else if (typ == GGML_TYPE_BF16) {
                 ggml_bf16_to_fp32_row((ggml_bf16_t *)inbuf, outbuf, nels);
             } else {
+                
+                #ifdef GGML_ZFP_IMATRIX
+                if (typ == GGML_TYPE_ZFP)
+                {
+                    assert(false && "IMATRIX and parallel processing is not supported");
+                }
+                #endif
                 qtype->to_float(inbuf, outbuf, nels);
             }
         };
@@ -18696,6 +18711,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             } else if (ggml_is_quantized(tensor->type) && !params->allow_requantize) {
                 throw std::runtime_error(format("requantizing from type %s is disabled", ggml_type_name(tensor->type)));
             } else {
+                
                 llama_tensor_dequantize_internal(tensor, f32_conv_buf, workers, nelements, nthread);
                 f32_data = (float *) f32_conv_buf.data();
             }
@@ -18782,8 +18798,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     double new_size_ = global_zfp_compressed_size/1024.0/1024.0;
     double CR = old_size / new_size_;
     double bitPerWeight = 8.0*global_zfp_compressed_size / (double)nelements_global;
-    printf("\nZFP_RESULT,type,%s,dim,%i,value,%f,imatrix,%s,n_size,%zu,original_size(MiB),%8.2f,compressed_size(MiB),%8.2f,compression_ratio,%8.2f,n_elements,%zu,bits_per_weight,%f\n",
-                global_zfp_comp_type, ZFPDIM, global_zfp_value, used_imatrix,global_index, old_size,  new_size_, CR, nelements_global, bitPerWeight);
+    printf("\nZFP_RESULT,type,%s,dim,%i,value_min,%f,value_max,%f,imatrix,%s,n_size,%zu,original_size(MiB),%8.2f,compressed_size(MiB),%8.2f,compression_ratio,%8.2f,n_elements,%zu,bits_per_weight,%f\n",
+                global_zfp_comp_type, ZFPDIM, global_zfp_value_min,global_zfp_value_max, used_imatrix,global_index, old_size,  new_size_, CR, nelements_global, bitPerWeight);
     fflush(stdout);
 #else // Default
     double old_size = total_size_org/1024.0/1024.0;
@@ -18791,7 +18807,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     double CR = old_size / new_size_;
     double bitPerWeight = 8.0*total_size_new / (double)nelements_global;
     size_t global_index = 0;
-    printf("\nQUANT_RESULT,type,%s,dim,0,value,%s,imatrix,%s,n_size,%zu,original_size(MiB),%8.2f,compressed_size(MiB),%8.2f,compression_ratio,%8.2f,n_elements,%zu,bits_per_weight,%f\n",
+    printf("\nQUANT_RESULT,type,%s,dim,0,value_min,%s,value_max,<empty>,imatrix,%s,n_size,%zu,original_size(MiB),%8.2f,compressed_size(MiB),%8.2f,compression_ratio,%8.2f,n_elements,%zu,bits_per_weight,%f\n",
                              "quantization", llama_model_ftype_name(params->ftype).c_str(), used_imatrix, global_index, old_size,  total_size_new/1024.0/1024.0  , CR, nelements_global, bitPerWeight);
     fflush(stdout);
 

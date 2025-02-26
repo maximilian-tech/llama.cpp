@@ -144,7 +144,7 @@ typedef sycl::half2 ggml_half2;
 
 #endif // GGML_COMMON_DECL_CUDA || GGML_COMMON_DECL_HIP
 
-//#define GGML_ZFP
+
 #ifdef GGML_ZFP
 extern size_t global_zfp_compressed_size;
 extern size_t global_index;
@@ -170,6 +170,41 @@ extern size_t global_index;
 //     #define ZFP_PREC (4)
 // #endif    
 /*XXX: ensure gguf has same ZFPDBG flag in read mode as it had in write mode */
+
+
+#define _CheckTypes(a,b)  // _Static_assert(_Generic(a, typeof (b):1, default: 0), "Mismatched types")
+
+#define Min(a,b) \
+    ({ \
+        const typeof (a) _a = (a); \
+        const typeof (b) _b = (b); \
+        _CheckTypes(_a,_b); \
+        (_a < _b ? _a : _b); \
+    })
+
+#define Max(a,b) \
+    ({ \
+        const typeof (a) _a = (a); \
+        const typeof (b) _b = (b); \
+        _CheckTypes(_a,_b); \
+        (_a > _b ? _a : _b); \
+    })
+
+#define Clamp(x,min,max) \
+    ({ \
+        const typeof (x) _x = (x); \
+        const typeof (min) _min = (min); \
+        const typeof (max) _max = (max); \
+        _CheckTypes(_x,_min); \
+        _CheckTypes(_x,_max); \
+        (_x > _max ? _max : (_x < _min ? _min : _x)); \
+    })
+
+static inline float safe_quant_weight(const float *quant_weight) {
+    return (quant_weight) ? Clamp(*quant_weight, 0.0f, 1.0f) : 0.0f;
+}
+   
+
 #define ZFPHEADER (ZFP_HEADER_MAGIC | ZFP_HEADER_MODE)
 #define ZFP_RW_HEADER(zfp, field, rw) /* read: rw==0 ; write: rw!=0 */         \
     do { if      (ZFPDBG && rw  && !zfp_write_header(zfp, field, ZFPHEADER))   \
@@ -178,32 +213,55 @@ extern size_t global_index;
                    { fprintf(stderr, "cannot read header\n"); assert(false); } \
     } while (0)
     
-    
-#define ZFP_STREAM_SET_COMPRESSION_RATE(zfp, field)                                 \
-    do { \
-        double rate = 4.0; \
-        char *value = getenv("ZFP_RATE"); \
-        if (value) { \
-            rate = atof(value); \
-        } \
-        if (global_skip_quantization == 1) \
-        { rate = 16.0; }            \
+// quant_weight is a float value between 0 and 1
+#define ZFP_STREAM_SET_COMPRESSION_RATE(zfp, field, quant_weight)            \
+    do {                                                                     \
+        double rate_min = 4.0, rate_max = 4.0, rate = 4.0;                   \
+        char *value = getenv("ZFP_RATE");                                    \
+        char *value_1 = getenv("ZFP_RATE_MIN");                              \
+        char *value_2 = getenv("ZFP_RATE_MAX");                              \
+                                                                             \
+        if (value) {                                                         \
+            rate_min = rate_max = atof(value);                               \
+        } else {                                                             \
+            if (value_1) rate_min = atof(value_1);                           \
+            if (value_2) rate_max = atof(value_2);                           \
+            if (!value_1 && value_2) rate_min = rate_max;                    \
+            if (value_1 && !value_2) rate_max = rate_min;                    \
+        }                                                                    \
+                                                                             \
+        assert(rate_min <= rate_max && "ZFP_RATE_MIN is larger than ZFP_RATE_MAX"); \
+        rate = rate_min;                                                     \
+                                                                             \
+        if (global_skip_quantization == 1) {                                 \
+            rate = 16.0;                                                     \
+        } else if (quant_weight) {                                           \
+            float qw = safe_quant_weight(quant_weight);                      \
+            rate = (double)qw * (rate_max - rate_min) + rate_min;                    \
+        }                                                                    \
+                                                                             \
         strncpy(global_zfp_comp_type, "rate", sizeof(global_zfp_comp_type) - 1); \
-        global_zfp_value = rate; \
-        if (rate < 0.0) { zfp_stream_set_reversible(zfp); }                \
-        else { \
-            __attribute__((unused)) double __ret = \
-                zfp_stream_set_rate(zfp, \
-                                    rate, \
-                                    zfp_field_type(field), \
-                                    zfp_field_dimensionality(field), \
-                                    zfp_false); }    \
+        global_zfp_value_min = rate_min;                                     \
+        global_zfp_value_max = rate_max;                                     \
+                                                                             \
+        if (rate < 0.0) {                                                    \
+            zfp_stream_set_reversible(zfp);                                  \
+        } else {                                                             \
+            __attribute__((unused)) double __ret =                           \
+                zfp_stream_set_rate(zfp,                                     \
+                                    rate,                                    \
+                                    zfp_field_type(field),                   \
+                                    zfp_field_dimensionality(field),         \
+                                    zfp_false);                              \
+        }                                                                    \
     } while (0)
 
-#define ZFP_STREAM_SET_COMPRESSION_ACC(zfp, field)                                 \
+#define ZFP_STREAM_SET_COMPRESSION_ACC(zfp, field, quant_weight)                                 \
     do { \
         double tol = 0.0001; \
         char *value = getenv("ZFP_TOL"); \
+        char *value_1 = getenv("ZFP_TOL_MIN"); \
+        char *value_2 = getenv("ZFP_TOL_MAX"); \
         if (value) { \
             tol = atof(value); \
         } \
@@ -217,10 +275,12 @@ extern size_t global_index;
     } while (0)
 
 
-#define ZFP_STREAM_SET_COMPRESSION_PREC(zfp, field)                                 \
+#define ZFP_STREAM_SET_COMPRESSION_PREC(zfp, field, quant_weight)                                 \
     do { \
         unsigned int precision= 4; \
         char *value = getenv("ZFP_PREC"); \
+        char *value_1 = getenv("ZFP_PREC_MIN"); \
+        char *value_2 = getenv("ZFP_PREC_MAX"); \
         if (value) { \
             precision = (unsigned int) atoi(value); \
         } \
@@ -234,11 +294,11 @@ extern size_t global_index;
     } while (0)
 
 #if defined(ZFP_USE_RATE)
-    #define ZFP_STREAM_SET_COMPRESSION(a,b) ZFP_STREAM_SET_COMPRESSION_RATE((a),(b))
+    #define ZFP_STREAM_SET_COMPRESSION(a,b,quant_weight) ZFP_STREAM_SET_COMPRESSION_RATE((a),(b),(quant_weight))
 #elif defined(ZFP_USE_ACC)
-    #define ZFP_STREAM_SET_COMPRESSION(a,b) ZFP_STREAM_SET_COMPRESSION_ACC((a),(b))
+    #define ZFP_STREAM_SET_COMPRESSION(a,b,quant_weight) ZFP_STREAM_SET_COMPRESSION_ACC((a),(b),(quant_weight))
 #elif defined(ZFP_USE_PREC)
-    #define ZFP_STREAM_SET_COMPRESSION(a,b) ZFP_STREAM_SET_COMPRESSION_PREC((a),(b))
+    #define ZFP_STREAM_SET_COMPRESSION(a,b,quant_weight) ZFP_STREAM_SET_COMPRESSION_PREC((a),(b),(quant_weight))
 #else
     #error "Specify either '-DZFP_USE_RATE' or '-DZFP_USE_ACC' or '-DZFP_USE_PREC'"
 #endif

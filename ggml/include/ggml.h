@@ -400,8 +400,11 @@ extern "C" {
     extern size_t global_zfp_compressed_size;
     extern int global_skip_quantization;
     extern char global_zfp_comp_type[16];
-    extern double global_zfp_value;
+    extern double global_zfp_value_min;
+    extern double global_zfp_value_max;
     extern size_t global_index;
+
+size_t dequantize_zfp(const void * src,float * dst,int64_t nrow, int64_t n_per_row );
 
 #endif
     // precision

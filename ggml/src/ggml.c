@@ -1085,15 +1085,14 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
         .blck_size                = ZFPBLOCK,
         .type_size                = ZFPBLOCK*12/8,// allows for 12  bits/per/weight  //????  zfp_stream_maximum_size(???, zfp_field_4d(NULL, zfp_type_float, 4, 4, 4, 4)),
         .is_quantized             = true,
-        /*.to_float                 = (ggml_to_float_t) dequantize_row_zfp,
-        .from_float               = (ggml_from_float_t) quantize_row_zfp,
+        .to_float                 = (ggml_to_float_t) dequantize_row_zfp,
+        /*.from_float               = (ggml_from_float_t) quantize_row_zfp,
         .from_float_ref           = (ggml_from_float_t) quantize_row_zfp_ref,
         .vec_dot                  = (ggml_vec_dot_t) ggml_vec_dot_zfp_f32,*/
-        .to_float                 = NULL,
         .from_float               = NULL,
         .from_float_ref           = NULL,
         .vec_dot                  = NULL,
-        
+
         .vec_dot_type             = GGML_TYPE_F32,
         .nrows                    = 1,
     },
