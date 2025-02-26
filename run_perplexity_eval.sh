@@ -10,14 +10,15 @@
 #SBATCH --gres=gpu:1
 
 
-PREFIX="/data/horse/ws/s0872522-llm-zfp/llama.cpp/Meta-Llama-3-8B/Meta-Llama-3-8B"
+SOURCE_DIR="/data/horse/ws/s0872522-llm-zfp/llama.cpp/"
+PREFIX="${SOURCE_DIR}Meta-Llama-3-8B/Meta-Llama-3-8B"
 EXEC_DIR="/home/s0872522/workspaces/cat/s0872522-llm-zfp/llama.cpp"
 
 cd $EXEC_DIR
 
 source ./modules.rc
 
-OUTPUT_SUMMARY=ppl.summary
+OUTPUT_SUMMARY="${SOURCE_DIR}Meta-Llama-3-8B/metric.summary_zfp_quant"
 
 echo "" > $OUTPUT_SUMMARY
 
@@ -25,8 +26,8 @@ echo "" > $OUTPUT_SUMMARY
 
 DIM="4"
 export NCPUS=8
-
-SETTINGS="-ngl 300 --ctx-size 4096 -s 1 -t ${NCPUS} --perplexity --file ./Meta-Llama-3-8B/wiki.train.raw"
+HELLASWAG_NTASK=1000
+SETTINGS="-ngl 300 -s 1 -t ${NCPUS} --ctx-size 4096 "
 
 # for model in F16 Q8_0 Q4_0 ; do
 
@@ -39,10 +40,16 @@ for DIM in 4 3 2 1 ; do
         echo $rate
         export ZFP_RATE=$rate
 
-        OUTPUT_NAME="from_ZFP-RATE_${ZFP_RATE}_dim_${DIM}"
+        #OUTPUT_NAME="from_ZFP-RATE_${ZFP_RATE}_dim_${DIM}"
+        
+        #OUTPUT_NAME="from_ZFP-RATE_4.00-6.00_dim_3_new"
+        OUTPUT_NAME="from_ZFP-RATE_4.10-4.10_dim_3_new"
+        srun ./_build/bin/llama-perplexity ${SETTINGS} --perplexity --file ./Meta-Llama-3-8B/wiki.train.raw -m "${PREFIX}-F16_${OUTPUT_NAME}.gguf" 2>&1 | tee ppl.${OUTPUT_NAME}
+	    srun ./_build/bin/llama-perplexity ${SETTINGS} --hellaswag -f "${SOURCE_DIR}/hellaswag_val_full.txt" --hellaswag-tasks ${HELLASWAG_NTASK} -m "${PREFIX}-F16_${OUTPUT_NAME}.gguf" 2>&1 | tee hellaswag.${OUTPUT_NAME}
+	    echo "${OUTPUT_NAME} -- $(grep 'Final estimate: PPL =' ppl.${model}_${imatrix}) -- HellaSwag: Score = $(grep -Po "(?<=^${HELLASWAG_NTASK}\s).+" hellaswag.${OUTPUT_NAME})" >> "$OUTPUT_SUMMARY"
 
-        ./_build/bin/llama-perplexity ${SETTINGS} -m ${PREFIX}-F16_${OUTPUT_NAME}.gguf 2>&1 | tee ppl.${OUTPUT_NAME}
-        echo "${OUTPUT_NAME} -- $(grep 'Final estimate: PPL =' ppl.${OUTPUT_NAME})" >> $OUTPUT_SUMMARY
+        exit
+
     done
 done
 

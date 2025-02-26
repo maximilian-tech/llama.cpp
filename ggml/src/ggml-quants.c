@@ -3220,7 +3220,7 @@ quantize_zfp_impl( const float* restrict src,
         
         stream_wseek(stream, (bitstream_offset)block_idx*stride*8);
         //write Header
-        size_t header_size = zfp_write_header(zfp, field, ZFP_HEADER_MODE|ZFP_HEADER_MAGIC);
+        size_t header_size = zfp_write_header(zfp, field, ZFPHEADER);
         assert(header_size > 0 && "ZFP Header write failed!");
         
         size_t zfp_compressed_size_tmp = ZFP_ENCODE_BLOCK( zfp, ( const float* )( src + block_idx * ZFPBLOCK ) ); //+ i * (int64_t)pow(4,ZFPDIM)));
@@ -3308,7 +3308,7 @@ dequantize_zfp_impl( const void * restrict src,
     {
         stream_rseek(stream, (bitstream_offset)block_idx*stride*8);
         
-        size_t header_size = zfp_read_header(zfp, field, ZFP_HEADER_MODE|ZFP_HEADER_MAGIC);
+        size_t header_size = zfp_read_header(zfp, field, ZFPHEADER);
         assert(header_size > 0 && "Could not read ZFP Header");
         //ZFP_STREAM_SET_COMPRESSION(zfp, field); // Set via Header
         // size_t bytes = zfp_stream_maximum_size(zfp, field);

@@ -93,10 +93,6 @@ if(GGML_ZFP_ENABLE)
     set(GGML_ZFP_DIMENSION 4 CACHE STRING  "The default dimension for ZFP Dimension (4^dimension) length")
     add_compile_definitions(-DZFPDIM=${GGML_ZFP_DIMENSION})
 
-    if(GGML_ZFP_ENABLE_IMATRIX)
-        add_compile_definitions(-DGGML_ZFP_IMATRIX)
-    endif()
-
     if(GGML_ZFP_MODE STREQUAL "ACCURACY" )
         add_compile_definitions(ZFP_USE_ACC)
         set(CMAKE_EXECUTABLE_SUFFIX ".acc")
@@ -109,6 +105,14 @@ if(GGML_ZFP_ENABLE)
     else()
         message(FATAL_ERROR "Specified unknown 'GGML_ZFP_MODE'")
     endif()
+
+    if(GGML_ZFP_ENABLE_IMATRIX)
+        add_compile_definitions(-DGGML_ZFP_IMATRIX)
+        string(APPEND CMAKE_EXECUTABLE_SUFFIX ".wi_imat")
+    else()
+        string(APPEND CMAKE_EXECUTABLE_SUFFIX ".no_imat")
+    endif()
+
     # Append GGML_ZFP_DIMENSION to the executable suffix
     string(APPEND CMAKE_EXECUTABLE_SUFFIX ".dim_${GGML_ZFP_DIMENSION}")
 

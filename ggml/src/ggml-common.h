@@ -205,7 +205,9 @@ static inline float safe_quant_weight(const float *quant_weight) {
 }
    
 
-#define ZFPHEADER (ZFP_HEADER_MAGIC | ZFP_HEADER_MODE)
+//#define ZFPHEADER (ZFP_HEADER_MAGIC | ZFP_HEADER_MODE)
+#define ZFPHEADER (ZFP_HEADER_MODE)
+
 #define ZFP_RW_HEADER(zfp, field, rw) /* read: rw==0 ; write: rw!=0 */         \
     do { if      (ZFPDBG && rw  && !zfp_write_header(zfp, field, ZFPHEADER))   \
                    { fprintf(stderr, "cannot write header\n"); assert(false); }\
@@ -256,41 +258,72 @@ static inline float safe_quant_weight(const float *quant_weight) {
         }                                                                    \
     } while (0)
 
-#define ZFP_STREAM_SET_COMPRESSION_ACC(zfp, field, quant_weight)                                 \
-    do { \
-        double tol = 0.0001; \
-        char *value = getenv("ZFP_TOL"); \
-        char *value_1 = getenv("ZFP_TOL_MIN"); \
-        char *value_2 = getenv("ZFP_TOL_MAX"); \
-        if (value) { \
-            tol = atof(value); \
-        } \
-        if (global_skip_quantization == 1) \
-        { tol = 0.000001; } \
+    #define ZFP_STREAM_SET_COMPRESSION_ACC(zfp, field, quant_weight)            \
+    do {                                                                     \
+        double tol_min = 0.0001, tol_max = 0.0001, tol = 0.0001;              \
+        char *value = getenv("ZFP_TOL");                                   \
+        char *value_1 = getenv("ZFP_TOL_MIN");                             \
+        char *value_2 = getenv("ZFP_TOL_MAX");                             \
+                                                                             \
+        if (value) {                                                         \
+            tol_min = tol_max = atof(value);                                 \
+        } else {                                                             \
+            if (value_1) tol_min = atof(value_1);                            \
+            if (value_2) tol_max = atof(value_2);                            \
+            if (!value_1 && value_2) tol_min = tol_max;                      \
+            if (value_1 && !value_2) tol_max = tol_min;                      \
+        }                                                                    \
+                                                                             \
+        assert(tol_min <= tol_max && "ZFP_TOL_MIN is larger than ZFP_TOL_MAX"); \
+        tol = tol_min;                                                       \
+                                                                             \
+        if (global_skip_quantization == 1) {                                 \
+            tol = 0.000001;                                                  \
+        } else if (quant_weight) {                                           \
+            float qw = safe_quant_weight(quant_weight);                      \
+            tol = (double)qw * (tol_max - tol_min) + tol_min;                \
+        }                                                                    \
+                                                                             \
         strncpy(global_zfp_comp_type, "accuracy", sizeof(global_zfp_comp_type) - 1); \
-        global_zfp_value = tol; \
-        __attribute__((unused)) double __ret = \
-                zfp_stream_set_accuracy(zfp, \
-                                        tol);    \
+        global_zfp_value_min = tol_min;                                      \
+        global_zfp_value_max = tol_max;                                      \
+                                                                             \
+        __attribute__((unused)) double __ret =                               \
+            zfp_stream_set_accuracy(zfp, tol);                               \
     } while (0)
 
-
-#define ZFP_STREAM_SET_COMPRESSION_PREC(zfp, field, quant_weight)                                 \
-    do { \
-        unsigned int precision= 4; \
-        char *value = getenv("ZFP_PREC"); \
-        char *value_1 = getenv("ZFP_PREC_MIN"); \
-        char *value_2 = getenv("ZFP_PREC_MAX"); \
-        if (value) { \
-            precision = (unsigned int) atoi(value); \
-        } \
-        if (global_skip_quantization == 1) \
-        { precision = 16; } \
+#define ZFP_STREAM_SET_COMPRESSION_PREC(zfp, field, quant_weight)            \
+    do {                                                                     \
+        unsigned int prec_min = 4, prec_max = 4, precision = 4;              \
+        char *value = getenv("ZFP_PREC");                                  \
+        char *value_1 = getenv("ZFP_PREC_MIN");                            \
+        char *value_2 = getenv("ZFP_PREC_MAX");                            \
+                                                                             \
+        if (value) {                                                         \
+            prec_min = prec_max = (unsigned int)atoi(value);                 \
+        } else {                                                             \
+            if (value_1) prec_min = (unsigned int)atoi(value_1);             \
+            if (value_2) prec_max = (unsigned int)atoi(value_2);             \
+            if (!value_1 && value_2) prec_min = prec_max;                    \
+            if (value_1 && !value_2) prec_max = prec_min;                    \
+        }                                                                    \
+                                                                             \
+        assert(prec_min <= prec_max && "ZFP_PREC_MIN is larger than ZFP_PREC_MAX"); \
+        precision = prec_min;                                                \
+                                                                             \
+        if (global_skip_quantization == 1) {                                 \
+            precision = 16;                                                  \
+        } else if (quant_weight) {                                           \
+            float qw = safe_quant_weight(quant_weight);                      \
+            precision = (unsigned int)(qw * (prec_max - prec_min) + prec_min /*add 0.5 to allow for rounding */+0.5);  \
+        }                                                                    \
+                                                                             \
         strncpy(global_zfp_comp_type, "precision", sizeof(global_zfp_comp_type) - 1); \
-        global_zfp_value = precision; \
-        __attribute__((unused)) unsigned int __ret = \
-                zfp_stream_set_precision(zfp, \
-                                        precision);    \
+        global_zfp_value_min = prec_min;                                     \
+        global_zfp_value_max = prec_max;                                     \
+                                                                             \
+        __attribute__((unused)) unsigned int __ret =                         \
+            zfp_stream_set_precision(zfp, precision);                        \
     } while (0)
 
 #if defined(ZFP_USE_RATE)
