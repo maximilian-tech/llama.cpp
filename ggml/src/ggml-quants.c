@@ -3404,12 +3404,12 @@ size_t dequantize_zfp(const void * src,
         printf(" <----\n", nrow, n_per_row);fflush(stdout);
     #else
         size_t row_size = ggml_row_size(GGML_TYPE_ZFP, n_per_row);
-        char *qrow = (char *)dst;
+        char *qrow = (char *)src;
         for (int64_t row = 0; row < nrow; ++row)
         {
-            dequantize_zfp_impl(src, qrow, n_per_row, quant_weights);
-            src += (char*)row_size;
-            qrow += n_per_row;
+            dequantize_zfp_impl(src, qrow, n_per_row);
+            qrow += row_size;
+            dst +=  n_per_row;
         }
     #endif
 }
@@ -3498,13 +3498,12 @@ size_t quantize_zfp(const float *restrict src,
         }
         
     #else    
-        size_t row_size = ggml_row_size(GGML_TYPE_ZFP, n_per_row);
         char *qrow = (char *)dst;
         for (int64_t row = 0; row < nrow; ++row)
         {
-        quantize_zfp_impl(src, qrow, n_per_row, quant_weights);
-        src += n_per_row;
-        qrow += row_size;
+            quantize_zfp_impl(src, qrow, n_per_row, quant_weights);
+            src += n_per_row;
+            qrow += row_size;
         }
         
     #endif    

@@ -226,5 +226,23 @@ done
     - Perplexity                <scalar value>       // from llama-perplexity
     - <Other Benchmarks>          <scalar value>     // from llama-perplexity
 
+
+
+## Order of tasks
+1. Download the model
+2. Transform to gguf
+3. Create the importance matrix for the models
+4. Compile the different ZFP Methods
+5. Create the weights according to the 
+6. Evaluate the model performance
+7. Evaluate the runtime performance
+8. Collect data
+9. Evaluate the data
+
+### Steps more detailed
+Default Quant:
+
+
+
 # old readme
 [here](org.readme.md)
