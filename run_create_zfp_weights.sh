@@ -31,7 +31,6 @@ fi
 
 
 OUTPUT_SUMMARY="log.summary"
-echo "" > "$OUTPUT_SUMMARY"
 
 for mode in "${modes[@]}"; do
     for model in "${models[@]}"; do
@@ -112,8 +111,8 @@ for mode in "${modes[@]}"; do
 
                     mkdir -p ${MODEL_SOURCEDIR}/jobs
                     mkdir -p ${MODEL_SOURCEDIR}/logs
-                    mkdir -p ${MODEL_SOURCEDIR}/zfp_tmp
-                    mkdir -p ${MODEL_SOURCEDIR}/zfp
+                    mkdir -p ${MODEL_SOURCEDIR}/weights
+                    mkdir -p ${MODEL_SOURCEDIR}/weights_F16
                     
                     JOB_SCRIPT="${MODEL_SOURCEDIR}/jobs/job_script_${model}_${OUTPUT_NAME}.sh"
 
@@ -131,25 +130,23 @@ for mode in "${modes[@]}"; do
 
 cat $0
 
-env | grep ZFP
-
 module purge
-module load $SCRIPT_DIR/../source_env_llvm.rc
+source $SCRIPT_DIR/../source_env_llvm.rc
 
 set -euo pipefail
 
 time srun "$EXECUTABLE" \
     ${IMATRIX_OPTION} \
     "${MODEL_SOURCEDIR}/${MODEL_PREFIX}-${SOURCE_TYPE}.gguf" \
-    "${MODEL_SOURCEDIR}/zfp_tmp/${MODEL_PREFIX}-ZFP_${OUTPUT_NAME}.gguf" \
+    "${MODEL_SOURCEDIR}/weights/${MODEL_PREFIX}-ZFP_${OUTPUT_NAME}.gguf" \
     ZFP \
     \${SLURM_CPUS_PER_TASK} \
     | tee >( grep "^ZFP_RESULT" > "${MODEL_SOURCEDIR}/log.${OUTPUT_NAME}")
 
 time srun "$EXECUTABLE" \
     --allow-requantize \
-    "${MODEL_SOURCEDIR}/zfp_tmp/${MODEL_PREFIX}-ZFP_${OUTPUT_NAME}.gguf" \
-    "${MODEL_SOURCEDIR}/zfp/${MODEL_PREFIX}-${SOURCE_TYPE}_${OUTPUT_NAME}.gguf" \
+    "${MODEL_SOURCEDIR}/weights/${MODEL_PREFIX}-ZFP_${OUTPUT_NAME}.gguf" \
+    "${MODEL_SOURCEDIR}/weights_F16/${MODEL_PREFIX}-${SOURCE_TYPE}_${OUTPUT_NAME}.gguf" \
     "${SOURCE_TYPE}" \
     \${SLURM_CPUS_PER_TASK}            
 
