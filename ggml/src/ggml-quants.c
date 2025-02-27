@@ -3202,7 +3202,7 @@ quantize_zfp_impl( const float* restrict src,
     if(ZFPDBG){assert(n % ZFPBLOCK == 0);}
     
     // Assume fixed stride
-    size_t stride = /*n_elements=*/ ZFPBLOCK  * /* stride in bytes per element */ 12  / /*Calc: Bits to Bytes*/ 8 ;
+    size_t stride = ggml_type_size(GGML_TYPE_ZFP); ///*n_elements=*/ ZFPBLOCK  * /* stride in bytes per element */ 12  / /*Calc: Bits to Bytes*/ 8 ;
     size_t num_blocks_per_row = n/ZFPBLOCK;
     
     zfp_stream* zfp = zfp_stream_open( NULL );
@@ -3293,7 +3293,7 @@ dequantize_zfp_impl( const void * restrict src,
     
     if(ZFPDBG){assert(n % ZFPBLOCK == 0);}
     
-    size_t stride = /*n_elements=*/ ZFPBLOCK  * /* stride in bytes per element */ 12  / /*Calc: Bits to Bytes*/ 8 ;
+    size_t stride = ggml_type_size(GGML_TYPE_ZFP);///*n_elements=*/ ZFPBLOCK  * /* stride in bytes per element */ 12  / /*Calc: Bits to Bytes*/ 8 ;
     size_t num_blocks_per_row = n/ZFPBLOCK;
     
     zfp_stream* zfp = zfp_stream_open(NULL);
@@ -3407,9 +3407,9 @@ size_t dequantize_zfp(const void * src,
         char *qrow = (char *)src;
         for (int64_t row = 0; row < nrow; ++row)
         {
-            dequantize_zfp_impl(src, qrow, n_per_row);
-            qrow += row_size;
+            dequantize_zfp_impl(qrow, dst,n_per_row);
             dst +=  n_per_row;
+            qrow += row_size;
         }
     #endif
 }
@@ -3590,7 +3590,7 @@ ggml_vec_dot_zfp_f32(int                    n,
     float x[ZFPBLOCK];
     //float *y;
 
-    const size_t stride = /*n_elements=*/ ZFPBLOCK  * /* stride in bytes per element */ 12  / /*Calc: Bits to Bytes*/ 8 ;
+    const size_t stride = ggml_type_size(GGML_TYPE_ZFP); ///*n_elements=*/ ZFPBLOCK  * /* stride in bytes per element */ 12  / /*Calc: Bits to Bytes*/ 8 ;
     const size_t num_blocks_per_row = n/ZFPBLOCK;
     
     zfp_stream* zfp   = zfp_stream_open(NULL);
@@ -3703,7 +3703,7 @@ ggml_vec_dot_zfp_zfp( int                   n,
 
     float sumf = 0.0, x[ZFPBLOCK], y[ZFPBLOCK];
     
-    size_t stride = /*n_elements=*/ ZFPBLOCK  * /* stride in bytes per element */ 12  / /*Calc: Bits to Bytes*/ 8 ;
+    size_t stride = ggml_type_size(GGML_TYPE_ZFP); ///*n_elements=*/ ZFPBLOCK  * /* stride in bytes per element */ 12  / /*Calc: Bits to Bytes*/ 8 ;
     size_t num_blocks_per_row = n/ZFPBLOCK;
     
     zfp_stream* zfpX  = zfp_stream_open(NULL);

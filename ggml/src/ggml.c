@@ -1083,7 +1083,7 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
     [GGML_TYPE_ZFP] = {
         .type_name                = "zfp",
         .blck_size                = ZFPBLOCK,
-        .type_size                = ZFPBLOCK*12/8,// allows for 12  bits/per/weight  //????  zfp_stream_maximum_size(???, zfp_field_4d(NULL, zfp_type_float, 4, 4, 4, 4)),
+        .type_size                = ZFPBLOCK*16/8,// allows for 12  bits/per/weight  //????  zfp_stream_maximum_size(???, zfp_field_4d(NULL, zfp_type_float, 4, 4, 4, 4)),
         .is_quantized             = true,
 #ifdef GGML_ZFP_IMATRIX
         /*Set these to NULL, as IMATRIX_SUPPORT shall only be used within llama-quantize, which uses other ways of calling subroutines */
