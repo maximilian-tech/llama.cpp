@@ -21,10 +21,10 @@ else
     models=( "3-8B" "3-70B" "3.1-8B" "3.1-70B" )
     imatrizes=( wi_imat no_imat )
     dims=( 4 3 2 1 )
-    modes=( rate ) #( rate prec acc )
+    modes=( rate prec acc )
     rate_parameters=( 3.00 3.50 4.00 4.50 5.00 6.00 8.00 )
-    prec_parameters=( 08 09 10 11 12 13 )
-    acc_parameters=( 0.05 0.10 0.12 0.13 0.14 )
+    prec_parameters=( 05 06 07 08 09 10 ) # 08 ~ 6pbw
+    acc_parameters=( 0.01 0.05 0.10 0.12 0.13 0.14 ) # 0.001 ~ 10bpw # 0.14 ~ 3bpw
 fi
 
 
@@ -65,8 +65,8 @@ for mode in "${modes[@]}"; do
                     elif [[ $mode == "prec" ]]; then
                         if [[ $imatrix == "wi_imat" ]]; then    
                             echo "Precision: '$PARAMETER'"
-                            export ZFP_PREC_MIN=$(echo "$PARAMETER - 2" | bc | awk '{printf "%02d\n", $0}')
-                            export ZFP_PREC_MAX=$PARAMETER
+                            export ZFP_PREC_MIN=$(echo "$PARAMETER" | bc | awk '{printf "%02d\n", $0}')
+                            export ZFP_PREC_MAX=$(echo "10" | bc | awk '{printf "%02d\n", $0}')
                         elif [[ $imatrix == "no_imat" ]]; then    
                             export ZFP_PREC=$PARAMETER
                             export ZFP_PREC_MIN=$ZFP_PREC
@@ -79,8 +79,8 @@ for mode in "${modes[@]}"; do
                     elif [[ $mode == "acc" ]]; then
                         if [[ $imatrix == "wi_imat" ]]; then    
                             echo "Tolerance: '$PARAMETER'"
-                            export ZFP_TOL_MIN=$(echo "$PARAMETER - 0.02" | bc | awk '{printf "%.2f\n", $0}')
-                            export ZFP_TOL_MAX=$PARAMETER
+                            export ZFP_TOL_MIN=$(echo "0.01" | bc | awk '{printf "%.2f\n", $0}')
+                            export ZFP_TOL_MAX=$(echo "$PARAMETER" | bc | awk '{printf "%.2f\n", $0}')
                         elif [[ $imatrix == "no_imat" ]]; then    
                             export ZFP_TOL=$PARAMETER
                             export ZFP_TOL_MIN=$ZFP_TOL
