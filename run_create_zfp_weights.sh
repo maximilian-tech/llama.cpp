@@ -12,74 +12,99 @@ source ../source_env_llvm.rc
 
 set euxo -pipefail
 
+SOURCE_DIR="/data/horse/ws/s0872522-llm-zfp/llama.cpp/"
+EXEC_DIR="/home/s0872522/workspaces/cat/s0872522-llm-zfp/llama.cpp"
+
 PREFIX="./Meta-Llama-3-8B/Meta-Llama-3-8B"
-DIM="4"
 export NCPUS=1
+
+SOURCE_TYPE="F16"
+models=( "3-8B" "3-70B" "3.1-8B" "3.1-70B" )
 
 OUTPUT_SUMMARY=log.summary
 echo "" > $OUTPUT_SUMMARY
 
 # gdb -batch -ex "run" -ex "bt" --args 
 
-#for DIM in 4 3 2 1 ; do
-for DIM in 3 ; do
-    #for rate in 3.50 4.00 4.50 4.65 5.00 6.00 8.00 ; do # Higher is better
-    for rate in 6.0 ; do
+for mode in rate prec acc ; done
+    for model in "${models[@]}" ; do
+        for imatrix in wi_imat no_imat ; do
+            for DIM in 4 3 2 1 ; do
+                if [[ $mode == "rate"]] ; do
+                    export PARAMETERS=( 3.50 4.00 4.50 4.65 5.00 6.00 8.00 )
+                elif [[ $mode == "prec"]] ; do
+                    export PARAMETERS=( 08 09 10 11 12 13 )
+                elif [[ $mode == "acc"]] ; do
+                    export PARAMETERS=( 0.05 0.10 0.12 0.13 0.14 )
+                else
+                    echo "Unknown mode '$mode'"
+                done
+                for PARAMETER  in "${PARAMETERS[@]}" ; do # Higher is better
+                    if [[ $mode == "rate"]] ; do
+                        if [[ $imatrix == "wi_imat" ]] ;do    
+                            export ZFP_RATE_MIN=$(echo "$PARAMETER" | bc | awk '{printf "%.2f\n", $0}')
+                            export ZFP_RATE_MAX=$(echo "$PARAMETER + 4" | awk '{printf "%.2f\n", $0}')
+                        elif [[ $imatrix == "no_imat" ]] ;do    
+                            export ZFP_RATE=$PARAMETER
+                            export ZFP_RATE_MIN=$ZFP_RATE
+                            export ZFP_RATE_MAX=$ZFP_RATE
+                        else 
+                            echo "Unknown imatrix value '$imatrix'"; exit 1
+                        fi
+                        export VALUE_MIN=$ZFP_RATE_MIN
+                        export VALUE_MAX=$ZFP_RATE_MAX
+                    elif [[ $mode == "prec"]] ; do
+                        if [[ $imatrix == "wi_imat" ]] ;do    
+                            echo "Precision: '$prec'"
+                            export ZFP_PREC_MIN=$(echo "$prec - 2" | bc | awk '{printf "%02d\n", $0}')
+                            export ZFP_PREC_MAX=$prec
+                        elif [[ $imatrix == "no_imat" ]] ;do    
+                            export ZFP_PREC=$PARAMETER
+                            export ZFP_PREC_MIN=$ZFP_PREC
+                            export ZFP_PREC_MAX=$ZFP_PREC
+                        else 
+                            echo "Unknown imatrix value '$imatrix'"; exit 1
+                        fi
+                        export VALUE_MIN=$ZFP_PREC_MIN
+                        export VALUE_MAX=$ZFP_PREC_MAX
+                    elif [[ $mode == "acc"]] ; do
+                        if [[ $imatrix == "wi_imat" ]] ;do    
+                            echo "Tolerance: '$tol'"
+                            export ZFP_TOL_MIN=$(echo "$tol - 0.02" | bc | awk '{printf "%.2f\n", $0}')
+                            export ZFP_TOL_MAX=$tol
+                        elif [[ $imatrix == "no_imat" ]] ;do    
+                            export ZFP_TOL=$PARAMETER
+                            export ZFP_TOL_MIN=$ZFP_TOL
+                            export ZFP_TOL_MAX=$ZFP_TOL
+                        else 
+                            echo "Unknown imatrix value '$imatrix'"; exit 1
+                        fi
+                        export VALUE_MIN=$ZFP_TOL_MIN
+                        export VALUE_MAX=$ZFP_TOL_MAX
+                    fi
+                    
+                    export OUTPUT_NAME="from_ZFP-${mode}_${VALUE_MIN}-${VALUE_MAX}_dim_${DIM}"
+                    
+                    MODEL_SOURCEDIR="${SOURCE_DIR}Meta-Llama-${model}"
+                    MODEL_PREFIX="${MODEL_SOURCEDIR}/Meta-Llama-${model}"    
+                    
+                    srun ./build/bin/llama-quantize.${mode}.${imatrix}.dim_${DIM} \
+                        --imatrix ${PREFIX}-imatrix.dat ${MODEL_PREFIX}-${SOURCE_TYPE}.gguf \
+                        ${MODEL_PREFIX}-ZFP_tmp.gguf \
+                        ZFP \
+                        ${NCPUS} \
+                        | tee log.${OUTPUT_NAME}
+                    
+                    srun ./build/bin/llama-quantize.${mode}.${imatrix}.dim_${DIM} \
+                        --allow-requantize \
+                        ${MODEL_PREFIX}-ZFP_tmp.gguf \
+                        ${MODEL_PREFIX}-${SOURCE_TYPE}_${OUTPUT_NAME}.gguf \
+                        ${SOURCE_TYPE} \
+                        ${NCPUS}            
 
-        echo "'Rate: '$rate'"
-: '        
-        export ZFP_RATE_MIN=$(echo "$rate - 2" | bc | awk '{printf "%.2f\n", $0}')
-        export ZFP_RATE_MAX=$(echo "$rate" | awk '{printf "%.2f\n", $0}')
-        
-        OUTPUT_NAME="from_ZFP-RATE_${ZFP_RATE_MIN}-${ZFP_RATE_MAX}_dim_${DIM}"
-
-        ./build/bin/llama-quantize.rate.wi_imat.dim_${DIM} --imatrix ${PREFIX}-imatrix.dat ${PREFIX}-F16.gguf  ${PREFIX}-ZFP_tmp.gguf ZFP  ${NCPUS} | tee log.${OUTPUT_NAME}
-
-        #./build/bin/llama-quantize.rate.dim_${DIM} ${PREFIX}-F16.gguf  ${PREFIX}-ZFP_tmp.gguf ZFP  ${NCPUS} | tee log.${OUTPUT_NAME}
-        ./build/bin/llama-quantize.rate.wi_imat.dim_${DIM} --allow-requantize  ${PREFIX}-ZFP_tmp.gguf ${PREFIX}-F16_${OUTPUT_NAME}_new.gguf F16 ${NCPUS}
-        grep "^ZFP_RESULT" log.${OUTPUT_NAME} >> $OUTPUT_SUMMARY
-'
-
-        export ZFP_RATE=4.10
-        export ZFP_RATE_MIN=$ZFP_RATE
-        export ZFP_RATE_MAX=$ZFP_RATE
-
-        OUTPUT_NAME="from_ZFP-RATE_${ZFP_RATE_MIN}-${ZFP_RATE_MAX}_dim_${DIM}"
-
-        ./build/bin/llama-quantize.rate.wi_imat.dim_${DIM} --imatrix ${PREFIX}-imatrix.dat ${PREFIX}-F16.gguf  ${PREFIX}-ZFP_tmp.gguf ZFP  ${NCPUS} | tee log.${OUTPUT_NAME}
-
-        #./build/bin/llama-quantize.rate.dim_${DIM} ${PREFIX}-F16.gguf  ${PREFIX}-ZFP_tmp.gguf ZFP  ${NCPUS} | tee log.${OUTPUT_NAME}
-        ./build/bin/llama-quantize.rate.wi_imat.dim_${DIM} --allow-requantize  ${PREFIX}-ZFP_tmp.gguf ${PREFIX}-F16_${OUTPUT_NAME}_new.gguf F16 ${NCPUS}
-        grep "^ZFP_RESULT" log.${OUTPUT_NAME} >> $OUTPUT_SUMMARY
-
-
-        exit 0
-
-    done
-#done
-
-    for prec in 08 09 10 11 12 13; do # higher is better
-        ##break
-        echo "Precision: '$prec'"
-        export ZFP_PREC_MIN=$(echo "$prec - 2" | bc | awk '{printf "%02d\n", $0}') # allow for better precision
-        export ZFP_PREC_MAX=$prec
-        OUTPUT_NAME="from_ZFP-PREC_${ZFP_PREC_MIN}-${ZFP_PREC_MAX}_dim_${DIM}"
-        ./build/bin/llama-quantize.prec.dim_${DIM} ${PREFIX}-F16.gguf  ${PREFIX}-ZFP_tmp.gguf ZFP  ${NCPUS} | tee log.${OUTPUT_NAME}
-        ./build/bin/llama-quantize.prec.dim_${DIM} --allow-requantize  ${PREFIX}-ZFP_tmp.gguf ${PREFIX}-F16_${OUTPUT_NAME}.gguf F16 ${NCPUS}
-        grep "^ZFP_RESULT" log.${OUTPUT_NAME} >> $OUTPUT_SUMMARY
-        
-        break
-    done
-
-    for tol in 0.05 0.10 0.12 0.13 0.14 ; do # Higher is worse
-        echo "Tolerance: '$tol'"
-        export ZFP_TOL_MIN=$(echo "$tol - 0.02" | bc | awk '{printf "%.2f\n", $0}')
-        export ZFP_TOL_MAX=$tol
-        OUTPUT_NAME="from_ZFP-TOL_${ZFP_TOL_MIN}-${ZFP_TOL_MAX}_dim_${DIM}"
-        ./build/bin/llama-quantize.acc.dim_${DIM} ${PREFIX}-F16.gguf  ${PREFIX}-ZFP_tmp.gguf ZFP  ${NCPUS} | tee log.${OUTPUT_NAME}
-        ./build/bin/llama-quantize.acc.dim_${DIM} --allow-requantize  ${PREFIX}-ZFP_tmp.gguf ${PREFIX}-F16_${OUTPUT_NAME}.gguf F16 ${NCPUS}
-        grep "^ZFP_RESULT" log.${OUTPUT_NAME} >> $OUTPUT_SUMMARY
-        break
-    done
-
-done
+                    grep "^ZFP_RESULT" log.${OUTPUT_NAME} >> $OUTPUT_SUMMARY
+                done # parameter
+            done # dim 
+        done # imat
+    done # model
+done # type
