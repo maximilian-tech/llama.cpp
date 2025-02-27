@@ -1,4 +1,7 @@
 #!/bin/env bash
+
+# For Default llama.cpp use: 'ZFP=OFF ./run_compile.sh'
+
 ZFP_MODE="RATE"
 [ "$1" = "rate" ] && ZFP_MODE="RATE"
 [ "$1" = "acc" ] && ZFP_MODE="ACCURACY"
@@ -43,12 +46,9 @@ for imatrix in OFF ON ; do
 	# -fassociative-math -ffp-contract=fast -fvectorize -funsafe-math-optimizations -freciprocal-math -fno-signed-zeros 
 
 		cmake --build build
-		#pushd build
 
 		[[ "$ZFP_VALUE" == "OFF" ]] && break 2 # only compile once, if no ZFP is used
 	done
 done
-#	make -j 8 -B
-#popd
 
 
