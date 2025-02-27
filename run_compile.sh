@@ -6,6 +6,8 @@ ZFP_MODE="RATE"
 
 set -euo pipefail
 
+ZFP_VALUE=$([[ "${ZFP:-ON}" == "OFF" ]] && echo "OFF" || echo "ON")
+
 #SCOREP_WRAPPER_INSTRUMENTER_FLAGS="--instrument-filter="
 export SCOREP_WRAPPER_INSTRUMENTER_FLAGS="--thread=pthread --instrument-filter=$PWD/initial_scorep_llvm.filter"
 for imatrix in OFF ON ; do
@@ -22,7 +24,7 @@ for imatrix in OFF ON ; do
 			-DGGML_AVX512_VBMI=True \
 			-DGGML_AVX512_VNNI=ON \
 			-DGGML_AVX512_BF16=ON \
-			-DGGML_ZFP_ENABLE=ON \
+			-DGGML_ZFP_ENABLE=${ZFP_VALUE} \
 			-DBUILD_UTILITIES=OFF \
 			-DZFP_WITH_OPENMP=OFF \
 			-DCMAKE_C_FLAGS_RELEASE="  -O3 -march=native -flto=full -mprefer-vector-width=512 -g -gdwarf-4 -fno-omit-frame-pointer -fassociative-math -ffp-contract=fast -fvectorize -funsafe-math-optimizations -freciprocal-math -fno-signed-zeros " \
@@ -42,6 +44,8 @@ for imatrix in OFF ON ; do
 
 		cmake --build build
 		#pushd build
+
+		[[ "$ZFP_VALUE" == "OFF" ]] && break 2 # only compile once, if no ZFP is used
 	done
 done
 #	make -j 8 -B
