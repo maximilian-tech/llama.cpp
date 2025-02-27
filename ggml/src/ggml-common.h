@@ -258,12 +258,12 @@ static inline float safe_quant_weight(const float *quant_weight) {
         }                                                                    \
     } while (0)
 
-    #define ZFP_STREAM_SET_COMPRESSION_ACC(zfp, field, quant_weight)            \
+    #define ZFP_STREAM_SET_COMPRESSION_ACC(zfp, field, quant_weight)         \
     do {                                                                     \
-        double tol_min = 0.0001, tol_max = 0.0001, tol = 0.0001;              \
-        char *value = getenv("ZFP_TOL");                                   \
-        char *value_1 = getenv("ZFP_TOL_MIN");                             \
-        char *value_2 = getenv("ZFP_TOL_MAX");                             \
+        double tol_min = 0.01, tol_max = 0.01, tol = 0.01;                   \
+        char *value = getenv("ZFP_TOL");                                     \
+        char *value_1 = getenv("ZFP_TOL_MIN");                               \
+        char *value_2 = getenv("ZFP_TOL_MAX");                               \
                                                                              \
         if (value) {                                                         \
             tol_min = tol_max = atof(value);                                 \
@@ -281,7 +281,7 @@ static inline float safe_quant_weight(const float *quant_weight) {
             tol = 0.000001;                                                  \
         } else if (quant_weight) {                                           \
             float qw = safe_quant_weight(quant_weight);                      \
-            tol = (double)qw * (tol_max - tol_min) + tol_min;                \
+            tol = -1.0*(double)qw * (tol_max - tol_min) + tol_max;                \
         }                                                                    \
                                                                              \
         strncpy(global_zfp_comp_type, "accuracy", sizeof(global_zfp_comp_type) - 1); \
@@ -294,7 +294,7 @@ static inline float safe_quant_weight(const float *quant_weight) {
 
 #define ZFP_STREAM_SET_COMPRESSION_PREC(zfp, field, quant_weight)            \
     do {                                                                     \
-        unsigned int prec_min = 4, prec_max = 4, precision = 4;              \
+        unsigned int prec_min = 8, prec_max = 8, precision = 8;              \
         char *value = getenv("ZFP_PREC");                                  \
         char *value_1 = getenv("ZFP_PREC_MIN");                            \
         char *value_2 = getenv("ZFP_PREC_MAX");                            \

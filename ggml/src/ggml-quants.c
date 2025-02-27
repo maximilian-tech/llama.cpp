@@ -3227,9 +3227,13 @@ quantize_zfp_impl( const float* restrict src,
         assert(zfp_compressed_size_tmp > 0 && "ZFP Compression failed!");
         
         zfp_stream_flush( zfp );
-
-        assert (((zfp_compressed_size_tmp + header_size) < (stride*8) ) && "Exceeded max. available space");
-
+        
+        if ((zfp_compressed_size_tmp + header_size) > (stride*8) )
+        {
+            printf("Compressed_size:'%zu'bit, header_size:'%zu'bit, avail:'%zu'bit\n", zfp_compressed_size_tmp, header_size, (size_t)stride*8);
+            fflush(stdout);
+            assert (false && "Exceeded max. available space");
+        }
         #pragma omp atomic
         global_zfp_compressed_size += zfp_compressed_size_tmp/8 + header_size/8;
     }
