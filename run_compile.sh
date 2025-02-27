@@ -11,11 +11,9 @@ set -euo pipefail
 
 ZFP_VALUE=$([[ "${ZFP:-ON}" == "OFF" ]] && echo "OFF" || echo "ON")
 
-#SCOREP_WRAPPER_INSTRUMENTER_FLAGS="--instrument-filter="
 export SCOREP_WRAPPER_INSTRUMENTER_FLAGS="--thread=pthread --instrument-filter=$PWD/initial_scorep_llvm.filter"
 for imatrix in OFF ON ; do
 	for dim in 1 2 3 4 ; do
-	#for dim in 3; do
 		SCOREP_WRAPPER=OFF cmake \
 			-G Ninja \
 			-B build \
@@ -42,8 +40,6 @@ for imatrix in OFF ON ; do
 			--fresh #\
 		#	-DCMAKE_C_COMPILER=scorep-clang \
 		#	-DCMAKE_CXX_COMPILER=scorep-clang++ 
-
-	# -fassociative-math -ffp-contract=fast -fvectorize -funsafe-math-optimizations -freciprocal-math -fno-signed-zeros 
 
 		cmake --build build
 
