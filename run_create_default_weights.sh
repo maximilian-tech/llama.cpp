@@ -1,28 +1,134 @@
 #!/bin/env bash
 
+set -euo pipefail
+
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+cd $SCRIPT_DIR
+
+SOURCE_TYPE="F16"
+
+if [[ "$1" == "test" ]]; then
+    models=( "3-8B" )
+    imatrizes=( wi_imat no_imat )
+    modes=( Q4_0 )
+
+else
+    # default
+    models=( "3-8B" "3-70B" "3.1-8B" "3.1-70B" )
+    imatrizes=( wi_imat no_imat )
+    
+    modes=( Q4_0 
+            Q4_1 
+            Q5_0 
+            Q5_1 
+            IQ2_M 
+            TQ1_0
+            TQ2_0
+            Q2_K
+            IQ3_XXS
+            IQ3_S
+            IQ3_M
+            Q3_K
+            IQ3_XS
+            Q3_K_S
+            Q3_K_M
+            Q3_K_L
+            IQ4_NL
+            IQ4_XS
+            Q4_K
+            Q4_K_S
+            Q4_K_M
+            Q5_K
+            Q5_K_S
+            Q5_K_M
+            Q6_K
+            Q8_0
+            Q4_0_4_4
+            Q4_0_4_8
+            Q4_0_8_8
+            F16
+            BF16
+            IQ1_S
+            IQ1_M
+            IQ2_S
+            IQ2_XXS
+            IQ2_XS
+            Q2_K_S
+          )
+fi
+
+OUTPUT_SUMMARY="log.summary"
+
+for mode in "${modes[@]}"; do
+    for model in "${models[@]}"; do
+        for imatrix in "${imatrizes[@]}"; do
+
+                    OUTPUT_NAME="${mode}_${imatrix}"
+                    
+                    MODEL_SOURCEDIR="${SCRIPT_DIR}/Meta-Llama-${model}"
+                    MODEL_PREFIX="Meta-Llama-${model}"
+                    
+                    EXECUTABLE="${SCRIPT_DIR}/build/bin/llama-quantize"
+                    if [[ ! -x "$EXECUTABLE" ]]; then
+                        echo "Error: Executable not found: $EXECUTABLE"
+                        exit 1
+                    fi
+
+                    if [[ "$imatrix" == "wi_imat" ]]; then
+                        IMATRIX_OPTION="--imatrix ${MODEL_SOURCEDIR}/imatrix.dat"
+                    else
+                        IMATRIX_OPTION=""
+                    fi
+
+
+                    mkdir -p ${MODEL_SOURCEDIR}/jobs
+                    mkdir -p ${MODEL_SOURCEDIR}/logs
+                    mkdir -p ${MODEL_SOURCEDIR}/weights
+                    mkdir -p ${MODEL_SOURCEDIR}/weights_F16
+                    
+                    JOB_SCRIPT="${MODEL_SOURCEDIR}/jobs/job_script_${model}_${OUTPUT_NAME}.sh"
+
+                    cat > "$JOB_SCRIPT" << EOF
+#!/bin/bash
+
 #SBATCH -N 1
 #SBATCH -n 1
 #SBATCH -c 4
-#SBATCH --mem=50G
-#SBATCH -A p_darwin
-#SBATCH --time=10:00:00
-#SBATCH --hint=nomultithread
+#SBATCH --output=${MODEL_SOURCEDIR}/logs/log.${OUTPUT_NAME}_%j.out
+#SBATCH --mem=80G
+#SBATCH -A p_lv_scc25
+#SBATCH --time=03:00:00
+#SBATCH --hint=multithread
 
-source ../source_env_llvm.rc
+cat $0
 
-set -euxo pipefail
+module purge
+source $SCRIPT_DIR/../source_env_llvm.rc
 
-GG="Meta-Llama-3-8B/Meta-Llama-3-8B"
-I="F32"
-for O in Q4_0 Q4_1 Q5_0 Q5_1 IQ2_M TQ1_0 TQ2_0 Q2_K IQ3_XXS IQ3_S IQ3_M Q3_K IQ3_XS Q3_K_S Q3_K_M Q3_K_L IQ4_NL IQ4_XS Q4_K Q4_K_S Q4_K_M Q5_K Q5_K_S Q5_K_M Q6_K Q8_0 Q4_0_4_4 Q4_0_4_8 Q4_0_8_8 F16 BF16 IQ1_S IQ1_M IQ2_S IQ2_XXS IQ2_XS Q2_K_S ZFP; do
-  rm -f "${GG}-${O}-noimatrix.gguf"
-  ./build/bin/llama-quantize "${GG}-${I}.gguf" "${GG}-${O}-noimatrix.gguf" ${O} $(nproc) \
-    2>&1 | tee -a "${GG}.log"
-done
+set -euo pipefail
+
+time srun "$EXECUTABLE" \
+    ${IMATRIX_OPTION} \
+    "${MODEL_SOURCEDIR}/${MODEL_PREFIX}-${SOURCE_TYPE}.gguf" \
+    "${MODEL_SOURCEDIR}/weights/${MODEL_PREFIX}-${OUTPUT_NAME}.gguf" \
+    ${mode} \
+    \${SLURM_CPUS_PER_TASK} \
+    | tee >( grep "^QUANT_RESULT" > "${MODEL_SOURCEDIR}/log.${OUTPUT_NAME}")
+
+time srun "$EXECUTABLE" \
+    --allow-requantize \
+    "${MODEL_SOURCEDIR}/weights/${MODEL_PREFIX}-${OUTPUT_NAME}.gguf" \
+    "${MODEL_SOURCEDIR}/weights_F16/${MODEL_PREFIX}-${SOURCE_TYPE}_${OUTPUT_NAME}.gguf" \
+    "${SOURCE_TYPE}" \
+    \${SLURM_CPUS_PER_TASK}            
+
+grep "^QUANT_RESULT" "${MODEL_SOURCEDIR}/log.${OUTPUT_NAME}" >> "$OUTPUT_SUMMARY"
+rm "${MODEL_SOURCEDIR}/log.${OUTPUT_NAME}"
 
 
-for O in Q4_0 Q4_1 Q5_0 Q5_1 IQ2_M TQ1_0 TQ2_0 Q2_K IQ3_XXS IQ3_S IQ3_M Q3_K IQ3_XS Q3_K_S Q3_K_M Q3_K_L IQ4_NL IQ4_XS Q4_K Q4_K_S Q4_K_M Q5_K Q5_K_S Q5_K_M Q6_K Q8_0 Q4_0_4_4 Q4_0_4_8 Q4_0_8_8 F16 BF16 IQ1_S IQ1_M IQ2_S IQ2_XXS IQ2_XS Q2_K_S ZFP; do
-  rm -f "${GG}-${O}-withimatrix.gguf"
-  ./build/bin/llama-quantize --imatrix "${GG}-imatrix.dat" "${GG}-${I}.gguf" "${GG}-${O}-withimatrix.gguf" ${O} $(nproc) \
-    2>&1 | tee -a "${GG}.log"
-done
+EOF
+
+                    sbatch "$JOB_SCRIPT"
+        done # imat
+    done # model
+done # mode
