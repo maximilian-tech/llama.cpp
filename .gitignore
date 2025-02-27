@@ -136,8 +136,10 @@ poetry.toml
 # Test models for lora adapters
 /lora-tests
 
-/Meta-Llama-3.1-70B
+/Meta-Llama-3-70B
 /Meta-Llama-3-8B
+/Meta-Llama-3.1-70B
+/Meta-Llama-3.1-8B
 
 /*-venv/
 /scorep-*/
