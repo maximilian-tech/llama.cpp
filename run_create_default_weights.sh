@@ -95,9 +95,9 @@ for mode in "${modes[@]}"; do
 #SBATCH -n 1
 #SBATCH -c 8
 #SBATCH --output=${MODEL_SOURCEDIR}/logs/log.${OUTPUT_NAME}_%j.out
-#SBATCH --mem=80G
+#SBATCH --mem=40G
 #SBATCH -A p_lv_scc25
-#SBATCH --time=03:00:00
+#SBATCH --time=05:00:00
 #SBATCH --hint=multithread
 
 cat $JOB_SCRIPT
