@@ -24,9 +24,10 @@ SETTINGS="-ngl 300 -s 1 -t ${NCPUS} --ctx-size 4096 "
 
 
 if [[ "${1:-}" == "test" ]]; then
-    models=( "3-8B" )
+    models=( "3-70B" )
 else
-    models=( "3-8B" "3-70B" "3.1-8B" "3.1-70B" )
+    #models=( "3-8B" "3-70B" "3.1-8B" "3.1-70B" )
+    models=( "3-8B" "3.1-8B" )
 fi
 
 
@@ -38,11 +39,12 @@ for model in "${models[@]}"; do
     NGPUS=$([[ "$model" =~ 70B ]] && echo "2" || echo "1")
     
     if [[ "${1:-}" == "test" ]]; then
-        search_command="find ${MODEL_SOURCEDIR}/weights_F16 -type f -size +60G| head -n 1"
+        search_command="find ${MODEL_SOURCEDIR}/weights_F16 -type f -size +14G | head -n 1"
     else
-        search_command="find ${MODEL_SOURCEDIR}/weights_F16 -type f -size +60G"
+        search_command="find ${MODEL_SOURCEDIR}/weights_F16 -type f -size +14G"
     fi
-
+    echo "Search Command: '${search_command}'"
+    
     for GGUF_F16_FILE in $(eval "$search_command") ; do
         OUTPUT_NAME="$(basename -- "$GGUF_F16_FILE" .gguf)"
         
@@ -62,7 +64,7 @@ for model in "${models[@]}"; do
 #SBATCH --mem=200G
 #SBATCH -A p_darwin
 #SBATCH --output="${MODEL_SOURCEDIR}/logs_eval/log.${OUTPUT_NAME}_%j.out"
-#SBATCH --time=08:00:00
+#SBATCH --time=04:00:00
 #SBATCH --hint=nomultithread
 #SBATCH --gres=gpu:${NGPUS}
 
@@ -95,10 +97,10 @@ srun "${EXECUTABLE_PPL}" \
      2>&1 | tee ${MODEL_SOURCEDIR}/logs_eval/${OUTPUT_NAME}.ppl
 
 
-PPL_RESULT=$(grep 'Final estimate: PPL =' "${MODEL_SOURCEDIR}/logs_eval/${OUTPUT_NAME}.ppl" 2>/dev/null) || PPL_RESULT="N/A"
-HSWAG_RESULT=$(grep -Po "(?<=^${HELLASWAG_NTASK}[[:space:]]).+" "${MODEL_SOURCEDIR}/logs_eval/${OUTPUT_NAME}.hellaswag" 2>/dev/null) || HSWAG_RESULT="N/A"
+PPL_RESULT=\$(grep 'Final estimate: PPL =' "${MODEL_SOURCEDIR}/logs_eval/${OUTPUT_NAME}.ppl" 2>/dev/null) || PPL_RESULT="N/A"
+HSWAG_RESULT=\$(grep -Po "(?<=^${HELLASWAG_NTASK}[[:space:]]).+" "${MODEL_SOURCEDIR}/logs_eval/${OUTPUT_NAME}.hellaswag" 2>/dev/null) || HSWAG_RESULT="N/A"
 
-echo "${OUTPUT_NAME} -- ${PPL_RESULT:-N/A} -- HellaSwag: Score = ${HSWAG_RESULT:-N/A}" >> "${OUTPUT_SUMMARY}"
+echo "${OUTPUT_NAME} -- \${PPL_RESULT:-N/A} -- HellaSwag: Score = \${HSWAG_RESULT:-N/A}" >> "${OUTPUT_SUMMARY}"
 
 EOF
         sync
