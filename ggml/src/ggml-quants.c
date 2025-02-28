@@ -3308,7 +3308,7 @@ dequantize_zfp_impl( const void * restrict src,
     
     zfp_stream_set_bit_stream( zfp, stream );    
 
-    for ( int64_t block_idx = 0; block_idx < n/ZFPBLOCK; ++block_idx )
+    for ( int64_t block_idx = 0; block_idx < num_blocks_per_row; ++block_idx )
     {
         stream_rseek(stream, (bitstream_offset)block_idx*stride*8);
         
@@ -3598,7 +3598,8 @@ ggml_vec_dot_zfp_f32(int                    n,
     const size_t num_blocks_per_row = n/ZFPBLOCK;
     
     zfp_stream* zfp   = zfp_stream_open(NULL);
-    zfp_field* field  = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK);
+    //zfp_field* field  = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK);
+    zfp_field* field = zfp_field_alloc();
     
     bitstream* stream = stream_open(vx, num_blocks_per_row*stride);
     zfp_stream_set_bit_stream(zfp, stream);
@@ -3606,10 +3607,15 @@ ggml_vec_dot_zfp_f32(int                    n,
     for (int64_t block_idx = 0; block_idx < n/ZFPBLOCK; ++block_idx)
     {
 
-        ZFP_STREAM_SET_COMPRESSION(zfp, field, NULL);
+        //ZFP_STREAM_SET_COMPRESSION(zfp, field, NULL);
         stream_rseek(stream, (bitstream_offset)block_idx*stride*8);
-
-        ZFP_DECODE_BLOCK(zfp, x);
+        
+        size_t header_size = zfp_read_header(zfp, field, ZFPHEADER);
+        assert(header_size > 0 && "Could not read ZFP Header");
+        
+        size_t zfp_compressed_size_tmp = ZFP_DECODE_BLOCK(zfp, x);
+        assert(zfp_compressed_size_tmp > 0 && "ZFP Deompression failed!");
+        
         const float* y = vy + block_idx*ZFPBLOCK;
 
 //        #pragma omp simd safelen(ZFPBLOCK) simdlen(16) reduce(+:sumf)
@@ -3711,27 +3717,38 @@ ggml_vec_dot_zfp_zfp( int                   n,
     size_t num_blocks_per_row = n/ZFPBLOCK;
     
     zfp_stream* zfpX  = zfp_stream_open(NULL);
-    zfp_field* fieldX = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK); //, n);
-
+    //zfp_field* fieldX = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK); //, n);
+    zfp_field* fieldX = zfp_field_alloc();
+    
     zfp_stream* zfpY  = zfp_stream_open(NULL);
-    zfp_field* fieldY = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK); //, n);
+    //zfp_field* fieldY = ZFP_FIELD_UD(NULL, zfp_type_float, ZFPBLOCK); //, n);
+    zfp_field* fieldY = zfp_field_alloc();
 
     bitstream* streamX = stream_open(vx, num_blocks_per_row*stride);
     bitstream* streamY = stream_open(vy, num_blocks_per_row*stride);
     
     zfp_stream_set_bit_stream(zfpX, streamX);
     zfp_stream_set_bit_stream(zfpY, streamY);
-    
-    for (int64_t block_idx = 0; block_idx < n/ZFPBLOCK; ++block_idx)
+
+    for (int64_t block_idx = 0; block_idx < num_blocks_per_row; ++block_idx)
     {   
-        ZFP_STREAM_SET_COMPRESSION(zfpX, fieldX,NULL);
-        ZFP_STREAM_SET_COMPRESSION(zfpY, fieldY,NULL);
+        //ZFP_STREAM_SET_COMPRESSION(zfpX, fieldX,NULL);
+        //ZFP_STREAM_SET_COMPRESSION(zfpY, fieldY,NULL);
         
         stream_rseek(streamX, (bitstream_offset)block_idx*stride*8);
         stream_rseek(streamY, (bitstream_offset)block_idx*stride*8);
 
-        ZFP_DECODE_BLOCK(zfpX, x);
-        ZFP_DECODE_BLOCK(zfpY, y);
+        size_t header_sizeX = zfp_read_header(zfpX, fieldX, ZFPHEADER);
+        assert(header_sizeX > 0 && "Could not read ZFP Header X");
+        
+        size_t header_sizeY = zfp_read_header(zfpY, fieldY, ZFPHEADER);
+        assert(header_sizeY > 0 && "Could not read ZFP Header Y");
+        
+        size_t zfp_compressed_size_tmpX = ZFP_DECODE_BLOCK(zfpX, x);
+        size_t zfp_compressed_size_tmpY = ZFP_DECODE_BLOCK(zfpY, y);
+        
+        assert(zfp_compressed_size_tmpX > 0 && "ZFP Deompression failed X!");
+        assert(zfp_compressed_size_tmpY > 0 && "ZFP Deompression failed Y!");
 
         //#pragma omp simd safelen(ZFPBLOCK) simdlen(16) reduce(+:sumf)
         for (int64_t j = 0; j < ZFPBLOCK; ++j)
