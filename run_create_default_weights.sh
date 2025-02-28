@@ -7,7 +7,7 @@ cd $SCRIPT_DIR
 
 SOURCE_TYPE="F16"
 
-if [[ "$1" == "test" ]]; then
+if [[ "${1:-}" == "test" ]]; then
     models=( "3-8B" )
     imatrizes=( wi_imat no_imat )
     modes=( Q4_0 )
@@ -93,14 +93,14 @@ for mode in "${modes[@]}"; do
 
 #SBATCH -N 1
 #SBATCH -n 1
-#SBATCH -c 4
+#SBATCH -c 8
 #SBATCH --output=${MODEL_SOURCEDIR}/logs/log.${OUTPUT_NAME}_%j.out
 #SBATCH --mem=80G
 #SBATCH -A p_lv_scc25
 #SBATCH --time=03:00:00
 #SBATCH --hint=multithread
 
-cat $0
+cat $JOB_SCRIPT
 
 module purge
 source $SCRIPT_DIR/../source_env_llvm.rc
@@ -127,7 +127,7 @@ rm "${MODEL_SOURCEDIR}/log.${OUTPUT_NAME}"
 
 
 EOF
-
+                    sleep 0.05
                     sbatch "$JOB_SCRIPT"
         done # imat
     done # model

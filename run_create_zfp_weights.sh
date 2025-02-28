@@ -7,7 +7,7 @@ cd $SCRIPT_DIR
 
 SOURCE_TYPE="F16"
 
-if [[ "$1" == "test" ]]; then
+if [[ "${1:-}" == "test" ]]; then
     models=( "3-8B" )
     imatrizes=( wi_imat no_imat )
     dims=( 3 )
@@ -36,16 +36,7 @@ for mode in "${modes[@]}"; do
     for model in "${models[@]}"; do
         for imatrix in "${imatrizes[@]}"; do
             for DIM in "${dims[@]}"; do
-                if [[ $mode == "rate" ]]; then
-                    PARAMETERS=$rate_parameters
-                elif [[ $mode == "prec" ]]; then
-                    PARAMETERS=$prec_parameters
-                elif [[ $mode == "acc" ]]; then
-                    PARAMETERS=$acc_parameters
-                else
-                    echo "Unknown mode '$mode'"
-                    exit 1
-                fi
+                declare -n PARAMETERS="${mode}_parameters"
                 
                 for PARAMETER in "${PARAMETERS[@]}"; do
                     if [[ $mode == "rate" ]]; then
@@ -63,7 +54,6 @@ for mode in "${modes[@]}"; do
                         VALUE_MAX=$ZFP_RATE_MAX
                     elif [[ $mode == "prec" ]]; then
                         if [[ $imatrix == "wi_imat" ]]; then    
-                            echo "Precision: '$PARAMETER'"
                             export ZFP_PREC_MIN=$(echo "$PARAMETER" | bc | awk '{printf "%02d\n", $0}')
                             export ZFP_PREC_MAX=$(echo "10" | bc | awk '{printf "%02d\n", $0}')
                         elif [[ $imatrix == "no_imat" ]]; then    
@@ -77,7 +67,6 @@ for mode in "${modes[@]}"; do
                         VALUE_MAX=$ZFP_PREC_MAX
                     elif [[ $mode == "acc" ]]; then
                         if [[ $imatrix == "wi_imat" ]]; then    
-                            echo "Tolerance: '$PARAMETER'"
                             export ZFP_TOL_MIN=$(echo "0.01" | bc | awk '{printf "%.2f\n", $0}')
                             export ZFP_TOL_MAX=$(echo "$PARAMETER" | bc | awk '{printf "%.2f\n", $0}')
                         elif [[ $imatrix == "no_imat" ]]; then    
@@ -92,7 +81,8 @@ for mode in "${modes[@]}"; do
                     fi
                     
                     OUTPUT_NAME="from_ZFP-${mode}_${VALUE_MIN}-${VALUE_MAX}_${imatrix}_dim_${DIM}"
-                    
+                    echo "Creating ${OUTPUT_NAME}"
+
                     MODEL_SOURCEDIR="${SCRIPT_DIR}/Meta-Llama-${model}"
                     MODEL_PREFIX="Meta-Llama-${model}"
                     
@@ -125,10 +115,10 @@ for mode in "${modes[@]}"; do
 #SBATCH --output=${MODEL_SOURCEDIR}/logs/log.${OUTPUT_NAME}_%j.out
 #SBATCH --mem=10G
 #SBATCH -A p_lv_scc25
-#SBATCH --time=03:00:00
+#SBATCH --time=05:00:00
 #SBATCH --hint=multithread
 
-cat $0
+cat $JOB_SCRIPT
 
 module purge
 source $SCRIPT_DIR/../source_env_llvm.rc
@@ -155,7 +145,7 @@ rm "${MODEL_SOURCEDIR}/log.${OUTPUT_NAME}"
 
 
 EOF
-
+                    sleep 0.05
                     sbatch "$JOB_SCRIPT"
                 done # parameter
             done # dim 
