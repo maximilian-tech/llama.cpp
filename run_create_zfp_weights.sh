@@ -13,7 +13,7 @@ if [[ "${1:-}" == "test" ]]; then
     dims=( 3 )
     modes=( rate )
     
-    rate_parameters=( 4.00  )
+    rate_parameters=( 4.00  6.00 )
     prec_parameters=( 08 09 10 11 12 13 )
     acc_parameters=( 0.05 0.10 0.12 0.13 0.14 )
 else
