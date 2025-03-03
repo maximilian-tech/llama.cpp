@@ -1,5 +1,5 @@
 #!/bin/env bash
-
+# run_perplexity_eval.sh
 set -euo pipefail
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
@@ -13,11 +13,11 @@ EXEC_DIR="/home/s0872522/workspaces/cat/s0872522-llm-zfp/llama.cpp"
 EXECUTABLE_PPL="${EXEC_DIR}/_build/bin/llama-perplexity"
 EXECUTABLE_CLI="${EXEC_DIR}/_build/bin/llama-cli"
 
-OUTPUT_SUMMARY="${SOURCE_DIR}/log.metric"
 
-HELLASWAG_NTASK=400
 
-CLI_PROMPT="How much wood would a woodchuck chuck if a woodchuck could chuck wood"
+HELLASWAG_NTASK=1000
+
+CLI_PROMPT="How much wood would a woodchuck chuck if a woodchuck could chuck wood?"
 
 export NCPUS=8
 SETTINGS="-ngl 300 -s 1 -t ${NCPUS} --ctx-size 4096 "
@@ -27,7 +27,8 @@ if [[ "${1:-}" == "test" ]]; then
     models=( "3-70B" )
 else
     #models=( "3-8B" "3-70B" "3.1-8B" "3.1-70B" )
-    models=( "3-8B" "3.1-8B" )
+    models=( "3.1-8B" "3.1-70B" )
+    #models=( "3-8B" "3.1-8B" )
 fi
 
 
@@ -35,6 +36,8 @@ for model in "${models[@]}"; do
 
     MODEL_SOURCEDIR="${SOURCE_DIR}Meta-Llama-${model}"
     MODEL_PREFIX="${MODEL_SOURCEDIR}/Meta-Llama-${model}"
+    
+    OUTPUT_SUMMARY="${MODEL_SOURCEDIR}/log.model_performance"
     
     NGPUS=$([[ "$model" =~ 70B ]] && echo "2" || echo "1")
     
@@ -52,6 +55,7 @@ for model in "${models[@]}"; do
         
         mkdir -p "${MODEL_SOURCEDIR}/jobs_eval"
         mkdir -p "${MODEL_SOURCEDIR}/logs_eval"
+        mkdir -p "${MODEL_SOURCEDIR}/result_model_performance"
         
         JOB_SCRIPT="${MODEL_SOURCEDIR}/jobs_eval/job_script_${model}_${OUTPUT_NAME}.sh"
 
@@ -64,7 +68,7 @@ for model in "${models[@]}"; do
 #SBATCH --mem=200G
 #SBATCH -A p_darwin
 #SBATCH --output="${MODEL_SOURCEDIR}/logs_eval/log.${OUTPUT_NAME}_%j.out"
-#SBATCH --time=04:00:00
+#SBATCH --time=08:00:00
 #SBATCH --hint=nomultithread
 #SBATCH --gres=gpu:${NGPUS}
 
@@ -79,7 +83,7 @@ srun "${EXECUTABLE_CLI}" \
      --repeat_penalty 1.0 \
      --prompt "${CLI_PROMPT}" \
      --predict 200 \
-     2>&1 | tee ${MODEL_SOURCEDIR}/logs_eval/${OUTPUT_NAME}.cli
+     2>&1 | tee ${MODEL_SOURCEDIR}/result_model_performance/${OUTPUT_NAME}.cli
 
 srun "${EXECUTABLE_PPL}" \
      ${SETTINGS} \
@@ -87,25 +91,25 @@ srun "${EXECUTABLE_PPL}" \
      -f "${SOURCE_DIR}/hellaswag_val_full.txt" \
      --hellaswag-tasks ${HELLASWAG_NTASK} \
      -m "${GGUF_F16_FILE}" \
-     2>&1 | tee ${MODEL_SOURCEDIR}/logs_eval/${OUTPUT_NAME}.hellaswag
+     2>&1 | tee ${MODEL_SOURCEDIR}/result_model_performance/${OUTPUT_NAME}.hellaswag
 
 srun "${EXECUTABLE_PPL}" \
      ${SETTINGS} \
      --perplexity \
      --file "${SCRIPT_DIR}/wiki.train.raw" \
      -m "${GGUF_F16_FILE}" \
-     2>&1 | tee ${MODEL_SOURCEDIR}/logs_eval/${OUTPUT_NAME}.ppl
+     2>&1 | tee ${MODEL_SOURCEDIR}/result_model_performance/${OUTPUT_NAME}.ppl
 
 
-PPL_RESULT=\$(grep 'Final estimate: PPL =' "${MODEL_SOURCEDIR}/logs_eval/${OUTPUT_NAME}.ppl" 2>/dev/null) || PPL_RESULT="N/A"
-HSWAG_RESULT=\$(grep -Po "(?<=^${HELLASWAG_NTASK}[[:space:]]).+" "${MODEL_SOURCEDIR}/logs_eval/${OUTPUT_NAME}.hellaswag" 2>/dev/null) || HSWAG_RESULT="N/A"
+PPL_RESULT=\$(grep 'Final estimate: PPL =' "${MODEL_SOURCEDIR}/result_model_performance/${OUTPUT_NAME}.ppl" 2>/dev/null) || PPL_RESULT="N/A"
+HSWAG_RESULT=\$(grep -Po "(?<=^${HELLASWAG_NTASK}[[:space:]]).+" "${MODEL_SOURCEDIR}/result_model_performance/${OUTPUT_NAME}.hellaswag" 2>/dev/null) || HSWAG_RESULT="N/A"
 
 echo "${OUTPUT_NAME} -- \${PPL_RESULT:-N/A} -- HellaSwag: Score = \${HSWAG_RESULT:-N/A}" >> "${OUTPUT_SUMMARY}"
 
 EOF
         sync
-        sleep 0.05
-        sbatch "$JOB_SCRIPT"
+        #sleep 0.05
+        #sbatch "$JOB_SCRIPT"
 
     done # gguf-file
 done # model 
