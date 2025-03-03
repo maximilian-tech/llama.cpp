@@ -1,5 +1,5 @@
 #!/bin/env bash
-
+# run_create_zfp_weights.sh
 set -euo pipefail
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
@@ -8,7 +8,7 @@ cd $SCRIPT_DIR
 SOURCE_TYPE="F16"
 
 if [[ "${1:-}" == "test" ]]; then
-    models=( "3-8B" )
+    models=( "3.1-8B" )
     imatrizes=( wi_imat no_imat )
     dims=( 3 )
     modes=( rate )
@@ -18,7 +18,7 @@ if [[ "${1:-}" == "test" ]]; then
     acc_parameters=( 0.05 0.10 0.12 0.13 0.14 )
 else
     # default
-    models=( "3-8B" "3-70B" "3.1-8B" "3.1-70B" )
+    models=( "3.1-8B" "3.1-70B" ) #"3-8B" "3-70B" 
     imatrizes=( wi_imat no_imat )
     dims=( 4 3 2 1 )
     modes=( rate prec acc )
@@ -30,7 +30,7 @@ fi
 
 
 
-OUTPUT_SUMMARY="log.summary"
+
 
 for mode in "${modes[@]}"; do
     for model in "${models[@]}"; do
@@ -101,11 +101,16 @@ for mode in "${modes[@]}"; do
 
                     mkdir -p ${MODEL_SOURCEDIR}/jobs
                     mkdir -p ${MODEL_SOURCEDIR}/logs
+                    mkdir -p ${MODEL_SOURCEDIR}/result_quant
                     mkdir -p ${MODEL_SOURCEDIR}/weights
                     mkdir -p ${MODEL_SOURCEDIR}/weights_F16
-                    
-                    JOB_SCRIPT="${MODEL_SOURCEDIR}/jobs/job_script_${model}_${OUTPUT_NAME}.sh"
 
+                    OUTPUT_SUMMARY="${MODEL_SOURCEDIR}/log.quant"
+
+                    JOB_SCRIPT="${MODEL_SOURCEDIR}/jobs/job_script_${model}_${OUTPUT_NAME}.sh"
+                                        
+                    
+                    
                     cat > "$JOB_SCRIPT" << EOF
 #!/bin/bash
 
@@ -125,13 +130,31 @@ source $SCRIPT_DIR/../source_env_llvm.rc
 
 set -euo pipefail
 
+if [[ "$imatrix" == "wi_imat" ]]; then
+    export ZFP_RATE_MIN=$VALUE_MIN
+    export ZFP_RATE_MAX=$VALUE_MAX
+    
+    export ZFP_PREC_MIN=$VALUE_MIN
+    export ZFP_PREC_MAX=$VALUE_MAX
+    
+    export ZFP_TOL_MIN=$VALUE_MIN
+    export ZFP_TOL_MAX=$VALUE_MAX                            
+else
+    export ZFP_RATE=$VALUE_MIN
+    
+    export ZFP_PREC=$VALUE_MIN
+    
+    export ZFP_TOL=$VALUE_MAX
+fi
+
+
 time srun "$EXECUTABLE" \
     ${IMATRIX_OPTION} \
     "${MODEL_SOURCEDIR}/${MODEL_PREFIX}-${SOURCE_TYPE}.gguf" \
     "${MODEL_SOURCEDIR}/weights/${MODEL_PREFIX}-ZFP_${OUTPUT_NAME}.gguf" \
     ZFP \
     \${SLURM_CPUS_PER_TASK} \
-    | tee >( grep "^ZFP_RESULT" > "${MODEL_SOURCEDIR}/log.${OUTPUT_NAME}")
+    | tee >( grep "^ZFP_RESULT" > "${MODEL_SOURCEDIR}/result_quant/log.${OUTPUT_NAME}")
 
 time srun "$EXECUTABLE" \
     --allow-requantize \
@@ -140,13 +163,13 @@ time srun "$EXECUTABLE" \
     "${SOURCE_TYPE}" \
     \${SLURM_CPUS_PER_TASK}            
 
-grep "^ZFP_RESULT" "${MODEL_SOURCEDIR}/log.${OUTPUT_NAME}" >> "$OUTPUT_SUMMARY"
-rm "${MODEL_SOURCEDIR}/log.${OUTPUT_NAME}"
+grep "^ZFP_RESULT" "${MODEL_SOURCEDIR}/result_quant/log.${OUTPUT_NAME}" >> "$OUTPUT_SUMMARY"
 
 
 EOF
-                    sleep 0.05
-                    sbatch "$JOB_SCRIPT"
+                    sync "$JOB_SCRIPT"
+                    #sleep 0.05
+                    #sbatch "$JOB_SCRIPT"
                 done # parameter
             done # dim 
         done # imat

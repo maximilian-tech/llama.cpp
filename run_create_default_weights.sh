@@ -1,4 +1,5 @@
 #!/bin/env bash
+# run_create_default_weights.sh
 
 set -euo pipefail
 
@@ -14,10 +15,12 @@ if [[ "${1:-}" == "test" ]]; then
 
 else
     # default
-    models=( "3-8B" "3-70B" "3.1-8B" "3.1-70B" )
+    #models=( "3-8B" "3-70B" "3.1-8B" "3.1-70B" )
+    models=( "3.1-8B" "3.1-70B" )
     imatrizes=( wi_imat no_imat )
     
-    modes=( Q4_0 
+    modes=( 
+            Q4_0 
             Q4_1 
             Q5_0 
             Q5_1 
@@ -25,27 +28,22 @@ else
             TQ1_0
             TQ2_0
             Q2_K
+            Q2_K_S
             IQ3_XXS
             IQ3_S
             IQ3_M
-            Q3_K
             IQ3_XS
             Q3_K_S
             Q3_K_M
             Q3_K_L
             IQ4_NL
             IQ4_XS
-            Q4_K
             Q4_K_S
             Q4_K_M
-            Q5_K
             Q5_K_S
             Q5_K_M
             Q6_K
             Q8_0
-            Q4_0_4_4
-            Q4_0_4_8
-            Q4_0_8_8
             F16
             BF16
             IQ1_S
@@ -53,11 +51,13 @@ else
             IQ2_S
             IQ2_XXS
             IQ2_XS
-            Q2_K_S
           )
 fi
 
-OUTPUT_SUMMARY="log.summary"
+            # Q4_0_4_4
+            # Q4_0_4_8
+            # Q4_0_8_8
+
 
 for mode in "${modes[@]}"; do
     for model in "${models[@]}"; do
@@ -83,9 +83,12 @@ for mode in "${modes[@]}"; do
 
                     mkdir -p ${MODEL_SOURCEDIR}/jobs
                     mkdir -p ${MODEL_SOURCEDIR}/logs
+                    mkdir -p ${MODEL_SOURCEDIR}/result_quant
                     mkdir -p ${MODEL_SOURCEDIR}/weights
                     mkdir -p ${MODEL_SOURCEDIR}/weights_F16
                     
+                    OUTPUT_SUMMARY="${MODEL_SOURCEDIR}/log.quant"
+
                     JOB_SCRIPT="${MODEL_SOURCEDIR}/jobs/job_script_${model}_${OUTPUT_NAME}.sh"
 
                     cat > "$JOB_SCRIPT" << EOF
@@ -113,7 +116,7 @@ time srun "$EXECUTABLE" \
     "${MODEL_SOURCEDIR}/weights/${MODEL_PREFIX}-${OUTPUT_NAME}.gguf" \
     ${mode} \
     \${SLURM_CPUS_PER_TASK} \
-    | tee >( grep "^QUANT_RESULT" > "${MODEL_SOURCEDIR}/log.${OUTPUT_NAME}")
+    | tee >( grep "^QUANT_RESULT" > "${MODEL_SOURCEDIR}/result_quant/log.${OUTPUT_NAME}")
 
 time srun "$EXECUTABLE" \
     --allow-requantize \
@@ -122,13 +125,13 @@ time srun "$EXECUTABLE" \
     "${SOURCE_TYPE}" \
     \${SLURM_CPUS_PER_TASK}            
 
-grep "^QUANT_RESULT" "${MODEL_SOURCEDIR}/log.${OUTPUT_NAME}" >> "$OUTPUT_SUMMARY"
-rm "${MODEL_SOURCEDIR}/log.${OUTPUT_NAME}"
+grep "^QUANT_RESULT" "${MODEL_SOURCEDIR}/result_quant/log.${OUTPUT_NAME}" >> "$OUTPUT_SUMMARY"
 
 
 EOF
-                    sleep 0.05
-                    sbatch "$JOB_SCRIPT"
+                    #sleep 0.05
+                    sync "$JOB_SCRIPT"
+                    #sbatch "$JOB_SCRIPT"
         done # imat
     done # model
 done # mode
