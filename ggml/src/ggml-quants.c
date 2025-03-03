@@ -3558,7 +3558,7 @@ ggml_vec_dot_zfp_f32_2(int                    n,
         ZFP_RW_HEADER(zfp, field, 0);
         ZFP_DECODE_BLOCK(zfp, x);
         y = vy + i*ZFPBLOCK;
-        #pragma omp simd safelen(ZFPBLOCK) simdlen(4) reduce(+:sumf)
+        //#pragma omp simd safelen(ZFPBLOCK) simdlen(4) reduce(+:sumf)
         for (int j = 0; j < ZFPBLOCK; ++j)
         {
             sumf += x[j] * y[j];
