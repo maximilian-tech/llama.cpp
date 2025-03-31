@@ -1,0 +1,193 @@
+# Makefile for a robust SLURM-aware ML workflow on high-latency filesystems
+
+SOURCE_TYPE := F16
+MODELS := 3.1-8B 3.1-70B
+IMATRICES := wi-imat no-imat
+
+# --- ZFP
+
+MODES_ZFP := rate prec acc
+DIMS := 1 2 3 4
+rate_parameters := 4.00 6.00
+prec_parameters := 08 09 10 11 12 13
+acc_parameters := 0.05 0.10 0.12 0.13 0.14
+
+# --- Native
+
+
+MODES_NATIVE := Q4_0 Q4_1 Q5_0 Q5_1 IQ2_M TQ1_0 TQ2_0 Q2_K Q2_K_S IQ3_XXS IQ3_S IQ3_M IQ3_XS Q3_K_S Q3_K_M Q3_K_L IQ4_NL IQ4_XS Q4_K_S Q4_K_M Q5_K_S Q5_K_M Q6_K Q8_0 F16 BF16 IQ1_S IQ1_M IQ2_S IQ2_XXS IQ2_XS
+
+SCRIPT_DIR := $(shell pwd)
+
+COMPILE_PARAMS_ZFP := $(shell echo $(foreach z,$(MODES_ZFP),\
+								 $(foreach d,$(DIMS),\
+								 $(foreach i,$(IMATRICES),\
+								 $(z)_$(d)_$(i)))) | tr ' ' '\n' | sort | uniq)
+
+COMPILE_PARAMS_NATIVE := $(shell echo $(foreach z,$(MODES_NATIVE),\
+								 $(z)_NULL_NULL) | tr ' ' '\n' | sort | uniq)	
+
+COMPILE_PARAMS := $(COMPILE_PARAMS_ZFP) $(COMPILE_PARAMS_NATIVE)
+								 
+QUANTIZATION_PARAMS_ZFP := $(shell echo $(foreach m,$(MODELS),\
+									$(foreach z,$(MODES_ZFP),\
+									$(foreach d,$(DIMS),\
+									$(foreach i,$(IMATRICES),\
+									$(foreach p,$($(z)_parameters),\
+									$(m)_$(z)_$(d)_$(i)_$(p)))))) | tr ' ' '\n' | sort | uniq)
+
+QUANTIZATION_PARAMS_NATIVE :=  $(shell echo $(foreach m,$(MODELS),\
+							$(foreach z,$(MODES_NATIVE),\
+							$(foreach d,NULL,\
+							$(foreach i,$(IMATRICES),\
+							$(foreach p,NULL,\
+							$(m)_$(z)_$(d)_$(i)_$(p)))))) | tr ' ' '\n' | sort | uniq)
+
+QUANTIZATION_PARAMS := $(QUANTIZATION_PARAMS_ZFP) $(QUANTIZATION_PARAMS_NATIVE)
+					
+# Final step targets
+COMPILE_DONE := $(addprefix output/compile_, $(addsuffix .done, $(COMPILE_PARAMS)))
+QUANTIZATION_DONE := $(addprefix output/quantize_, $(addsuffix .done, $(QUANTIZATION_PARAMS)))
+ANALYZE_DONE := $(addprefix output/analyze_, $(addsuffix .done, $(PARAMS)))
+
+.PHONY: all clean
+
+all: $(ANALYZE_DONE)
+
+compile: $(COMPILE_DONE)
+quantize : $(QUANTIZATION_DONE)
+
+# Helper Functions
+zfp_value = $(if $(findstring native,$(1)),OFF,ON)
+imatrix_value = $(if $(findstring no-imat,$(1)),OFF,ON)
+get_field = $(word $(2),$(subst _, ,$(1)))
+
+# Step 1: Compile
+output/compile_%.done:
+	mkdir -p output logs build
+	logfile=logs/compile_$*.log; \
+	sbatch --wait \
+		--job-name=compile_$* \
+		--output=$$logfile \
+		--cpus-per-task=8 --mem=20G --time=01:00:00 \
+		--constraint=local_disk \
+		--hint=multithread \
+		--wrap="set -euo pipefail; \
+			cd $(SCRIPT_DIR); \
+			module purge; \
+			source $(SCRIPT_DIR)/../source_env_llvm.rc; \
+			rm -rf /tmp/build_$*; \
+			SCOREP_WRAPPER=OFF cmake \
+				-B /tmp/build_$* \
+				--install-prefix=$(SCRIPT_DIR)/install \
+				-DCMAKE_BUILD_TYPE=Release \
+				-DBUILD_SHARED_LIBS=False \
+				-DGGML_LTO=True \
+				-DGGML_NATIVE=True \
+				-DGGML_AVX512=ON \
+				-DGGML_AVX512_VBMI=True \
+				-DGGML_AVX512_VNNI=ON \
+				-DGGML_AVX512_BF16=ON \
+				-DBUILD_UTILITIES=OFF \
+				-DZFP_WITH_OPENMP=OFF \
+				-DCMAKE_C_FLAGS_RELEASE='  -O3 -march=native -fuse-ld=lld -mtune=native -flto=full -mprefer-vector-width=512 -g -gdwarf-4 -fno-omit-frame-pointer -fassociative-math -ffp-contract=fast -funsafe-math-optimizations -freciprocal-math -fno-signed-zeros -fvectorize' \
+				-DCMAKE_CXX_FLAGS_RELEASE='-O3 -march=native -fuse-ld=lld -mtune=native -flto=full -mprefer-vector-width=512 -g -gdwarf-4 -fno-omit-frame-pointer -fassociative-math -ffp-contract=fast -funsafe-math-optimizations -freciprocal-math -fno-signed-zeros -fvectorize' \
+				-DZFP_ENABLE_PIC=OFF \
+				-DCMAKE_C_COMPILER=clang \
+				-DCMAKE_CXX_COMPILER=clang++ \
+				-DCMAKE_LINKER_TYPE=LLD \
+				-DGGML_ZFP_ENABLE=$(call zfp_value,$*) \
+				-DGGML_ZFP_MODE=$(call get_field,$*,1) \
+				-DGGML_ZFP_DIMENSION=$(call get_field,$*,2) \
+				-DGGML_ZFP_ENABLE_IMATRIX=$(call imatrix_value,$*) \
+				--fresh; \
+			make -C /tmp/build_$* -j 8;  \
+			make -C /tmp/build_$* install; \
+			touch output/compile_$*.done; \
+			sync"
+	echo "Successfully compiled '$*'"
+
+# Step 2: Quantize Weights
+output/quantize_%.done:
+	mkdir -p output logs build
+	logfile=logs/compile_$*.log; \
+	sbatch --wait \
+		--job-name=quantize_$* \
+		--output=$$logfile \
+		--cpus-per-task=1 --mem=20G --time=05:00:00 \
+		--hint=multithread \
+		--wrap="set -euo pipefail; \
+			cd $(SCRIPT_DIR); \
+			module purge; \
+			source $(SCRIPT_DIR)/../source_env_llvm.rc; \
+			time srun "$EXECUTABLE" \
+				${IMATRIX_OPTION} \
+				"${MODEL_SOURCEDIR}/${MODEL_PREFIX}-${SOURCE_TYPE}.gguf" \
+				"${MODEL_SOURCEDIR}/weights/${MODEL_PREFIX}-ZFP_${OUTPUT_NAME}.gguf" \
+				ZFP \
+				\${SLURM_CPUS_PER_TASK} \
+				| tee >( grep "^ZFP_RESULT" > "${MODEL_SOURCEDIR}/result_quant/log.${OUTPUT_NAME}")
+
+			time srun "$EXECUTABLE" \
+				--allow-requantize \
+				"${MODEL_SOURCEDIR}/weights/${MODEL_PREFIX}-ZFP_${OUTPUT_NAME}.gguf" \
+				"${MODEL_SOURCEDIR}/weights_F16/${MODEL_PREFIX}-${SOURCE_TYPE}_${OUTPUT_NAME}.gguf" \
+				"${SOURCE_TYPE}" \
+				\${SLURM_CPUS_PER_TASK}"    
+	
+	echo "Successfully quantized '$*'"
+
+# Step 4: Analyze Runtime Performance
+output/analyze_%.done: output/quantize_%.done
+	mkdir -p output logs
+	logfile=logs/analyze_$*.log; \
+	sbatch --parsable --job-name=analyze_$* \
+	       --output=$$logfile \
+	       --cpus-per-task=8 --mem=60G --time=03:00:00 \
+	       --wrap="set -euo pipefail; \
+	         cd $(SCRIPT_DIR); \
+	         ./run_perplexity_eval.sh test; \
+	         touch output/analyze_$*.done"
+
+clean:
+	rm -rf output logs
+#
+#output/quantize_%.done:
+#	@mkdir -p output logs
+#	@params=$*; \
+#	model=$$(echo $$params | cut -d_ -f1); \
+#	imatrix=$$(echo $$params | cut -d_ -f2); \
+#	dim=$$(echo $$params | cut -d_ -f3); \
+#	mode=$$(echo $$params | cut -d_ -f4); \
+#	param=$$(echo $$params | cut -d_ -f5); \
+#	outname=from_ZFP-$$mode_$$(echo $$param | tr '.' '-')_$$imatrix_dim_$$dim; \
+#	exec=build/bin/llama-quantize.$$mode.$$imatrix.dim_$$dim; \
+#	model_src=Meta-Llama-$$model; \
+#	model_prefix=Meta-Llama-$$model; \
+#	if [[ ! -x $$exec ]]; then echo "Missing executable: $$exec"; exit 1; fi; \
+#	if [[ "$$imatrix" = "wi_imat" ]]; then \
+#	  imatrix_opt="--imatrix $$model_src/imatrix.dat"; \
+#	  export_line="export ZFP_${mode}_MIN=$$param; export ZFP_${mode}_MAX=12;"; \
+#	else \
+#	  imatrix_opt=""; \
+#	  export_line="export ZFP_${mode}=$$param;"; \
+#	fi; \
+#	logfile=logs/quantize_$$params.log; \
+#	sbatch --job-name=quant_$$params \
+#	       --output=$$logfile \
+#	       --cpus-per-task=1 --mem=10G --time=05:00:00 \
+#	       --wrap="set -euo pipefail; \
+#	              cd $$(pwd); \
+#	              module purge; \
+#	              source ./source_env_llvm.rc; \
+#	              $$export_line \
+#	              time srun $$exec $$imatrix_opt \
+#	                   $$model_src/$$model_prefix-${SOURCE_TYPE}.gguf \
+#	                   $$model_src/weights/$$model_prefix-ZFP_$$outname.gguf \
+#	                   ZFP \$$SLURM_CPUS_PER_TASK | tee >(grep '^ZFP_RESULT' > $$model_src/result_quant/log.$$outname); \
+#	              time srun $$exec --allow-requantize \
+#	                   $$model_src/weights/$$model_prefix-ZFP_$$outname.gguf \
+#	                   $$model_src/weights_F16/$$model_prefix-${SOURCE_TYPE}_$$outname.gguf \
+#	                   ${SOURCE_TYPE} \$$SLURM_CPUS_PER_TASK; \
+#	              grep '^ZFP_RESULT' $$model_src/result_quant/log.$$outname >> $$model_src/log.quant; \
+#	              touch output/quantize_$$params.done"
