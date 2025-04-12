@@ -150,7 +150,6 @@ extern size_t global_zfp_compressed_size;
 extern size_t global_index;
 
 #include "zfp.h"
-#include "uthash.h"
 #ifndef ZFPDBG
     #define ZFPDBG 0
 #endif  //ZFPDBG
