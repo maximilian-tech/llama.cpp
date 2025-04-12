@@ -11,11 +11,12 @@ set -euo pipefail
 
 ZFP_VALUE=$([[ "${ZFP:-ON}" == "OFF" ]] && echo "OFF" || echo "ON")
 
-export SCOREP_WRAPPER_INSTRUMENTER_FLAGS="--verbose --thread=pthread --instrument-filter=$PWD/initial_scorep_llvm.filter"
+export SCOREP_WRAPPER_INSTRUMENTER_FLAGS="--verbose --thread=pthread --instrument-filter=$PWD/initial_scorep_zfp-rate-dim3.filter"
+#export SCOREP_WRAPPER_INSTRUMENTER_FLAGS="--verbose --thread=pthread --instrument-filter=$PWD/initial_scorep_llamaNOZFP.filter"
 for imatrix in OFF ON ; do
 #for imatrix in OFF ; do
 	for dim in 1 2 3 4 ; do
-	#for dim in 4 ; do
+	#for dim in 3 4 ; do
 		SCOREP_WRAPPER=OFF cmake \
 			-B build \
 			-DCMAKE_BUILD_TYPE=Release \
@@ -38,7 +39,7 @@ for imatrix in OFF ON ; do
 			-DGGML_ZFP_MODE=${ZFP_MODE} \
 			-DGGML_ZFP_DIMENSION=${dim} \
 			-DGGML_ZFP_ENABLE_IMATRIX=${imatrix} \
-			--fresh #\
+			--fresh \
 			#-DCMAKE_C_COMPILER=scorep-clang \
 			#-DCMAKE_CXX_COMPILER=scorep-clang++ 
 

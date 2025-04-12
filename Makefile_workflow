@@ -109,34 +109,45 @@ output/compile_%.done:
 
 # Step 2: Quantize Weights
 output/quantize_%.done:
-	mkdir -p output logs build
-	logfile=logs/compile_$*.log; \
+	mkdir -p output logs build runscripts
+	jobscript=runscripts/quantize_$*
+	
+	
+	
+	
+	logfile=logs/quantize_$*.log
 	sbatch --wait \
 		--job-name=quantize_$* \
 		--output=$$logfile \
 		--cpus-per-task=1 --mem=20G --time=05:00:00 \
-		--hint=multithread \
-		--wrap="set -euo pipefail; \
-			cd $(SCRIPT_DIR); \
-			module purge; \
-			source $(SCRIPT_DIR)/../source_env_llvm.rc; \
-			time srun "$EXECUTABLE" \
-				${IMATRIX_OPTION} \
-				"${MODEL_SOURCEDIR}/${MODEL_PREFIX}-${SOURCE_TYPE}.gguf" \
-				"${MODEL_SOURCEDIR}/weights/${MODEL_PREFIX}-ZFP_${OUTPUT_NAME}.gguf" \
-				ZFP \
-				\${SLURM_CPUS_PER_TASK} \
-				| tee >( grep "^ZFP_RESULT" > "${MODEL_SOURCEDIR}/result_quant/log.${OUTPUT_NAME}")
-
-			time srun "$EXECUTABLE" \
-				--allow-requantize \
-				"${MODEL_SOURCEDIR}/weights/${MODEL_PREFIX}-ZFP_${OUTPUT_NAME}.gguf" \
-				"${MODEL_SOURCEDIR}/weights_F16/${MODEL_PREFIX}-${SOURCE_TYPE}_${OUTPUT_NAME}.gguf" \
-				"${SOURCE_TYPE}" \
-				\${SLURM_CPUS_PER_TASK}"    
-	
+		--hint=nomultithread \
+		--test-only \
+		--wrap="
+		set -euo pipefail; \
+		cd $(SCRIPT_DIR); \
+		module purge; \
+		source $(SCRIPT_DIR)/../source_env_llvm.rc; \
+		\
+		time srun "$$EXECUTABLE" \
+			$${IMATRIX_OPTION} \
+			"${MODEL_SOURCEDIR}/${MODEL_PREFIX}-${SOURCE_TYPE}.gguf" \
+			"${MODEL_SOURCEDIR}/weights/${MODEL_PREFIX}-ZFP_${OUTPUT_NAME}.gguf" \
+			ZFP \
+			"$${SLURM_CPUS_PER_TASK}" \
+			| tee >( grep "^ZFP_RESULT" > "${MODEL_SOURCEDIR}/result_quant/log.${OUTPUT_NAME}"); \
+		\
+		time srun "$EXECUTABLE" \
+			--allow-requantize \
+			"${MODEL_SOURCEDIR}/weights/${MODEL_PREFIX}-ZFP_${OUTPUT_NAME}.gguf" \
+			"${MODEL_SOURCEDIR}/weights_F16/${MODEL_PREFIX}-${SOURCE_TYPE}_${OUTPUT_NAME}.gguf" \
+			"${SOURCE_TYPE}" \
+			"$${SLURM_CPUS_PER_TASK}"; \
+		"
+		
 	echo "Successfully quantized '$*'"
 
+	
+	
 # Step 4: Analyze Runtime Performance
 output/analyze_%.done: output/quantize_%.done
 	mkdir -p output logs

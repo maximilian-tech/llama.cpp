@@ -18,7 +18,7 @@ export OMP_MAX_ACTIVE_LEVELS=1
 export SCOREP_METRIC_PLUGINS=topdown_plugin
 export SCOREP_METRIC_TOPDOWN_PLUGIN='*'
 
-perf record -g -e 'cycles,L1-dcache-load-misses' \
+perf record -g -e 'cycles' \
 ./build/bin/llama-cli \
 	--model ./Meta-Llama-3-8B/Meta-Llama-3-8B-${MODEL}.gguf \
 	--threads $NCORES \

@@ -152,8 +152,8 @@ int main(int argc, char **argv) {
             float *tb_data = (float *)tb->data;
             for (int i = 0; i < ggml_nelements(ta); ++i)
             {
-                ta_f32_buf[i] = ggml_fp16_to_fp32(ta_data[i]);
-                tb_f32_buf[i] = ggml_fp16_to_fp32(tb_data[i]);
+                ta_f32_buf[i] = ta_data[i];
+                tb_f32_buf[i] = tb_data[i];
             }
         }
         else{

@@ -1,6 +1,8 @@
-#!/bin/env bash
+#!/bin/bash
 # run_perplexity_eval.sh
+
 set -euo pipefail
+
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 cd "$SCRIPT_DIR"
@@ -58,14 +60,16 @@ for model in "${models[@]}"; do
         mkdir -p "${MODEL_SOURCEDIR}/result_model_performance"
         
         JOB_SCRIPT="${MODEL_SOURCEDIR}/jobs_eval/job_script_${model}_${OUTPUT_NAME}.sh"
-
+        
+        echo "Create Jobsscript '${JOB_SCRIPT}'"
+        
         cat > "$JOB_SCRIPT" << EOF
 #!/bin/bash
 
 #SBATCH -N 1
 #SBATCH -n 1
 #SBATCH -c ${NCPUS}
-#SBATCH --mem=200G
+#SBATCH --mem=185G
 #SBATCH -A p_darwin
 #SBATCH --output="${MODEL_SOURCEDIR}/logs_eval/log.${OUTPUT_NAME}_%j.out"
 #SBATCH --time=08:00:00
@@ -100,6 +104,10 @@ srun "${EXECUTABLE_PPL}" \
      -m "${GGUF_F16_FILE}" \
      2>&1 | tee ${MODEL_SOURCEDIR}/result_model_performance/${OUTPUT_NAME}.ppl
 
+
+sync ${MODEL_SOURCEDIR}/result_model_performance/${OUTPUT_NAME}.cli
+sync ${MODEL_SOURCEDIR}/result_model_performance/${OUTPUT_NAME}.hellaswag
+sync ${MODEL_SOURCEDIR}/result_model_performance/${OUTPUT_NAME}.ppl
 
 PPL_RESULT=\$(grep 'Final estimate: PPL =' "${MODEL_SOURCEDIR}/result_model_performance/${OUTPUT_NAME}.ppl" 2>/dev/null) || PPL_RESULT="N/A"
 HSWAG_RESULT=\$(grep -Po "(?<=^${HELLASWAG_NTASK}[[:space:]]).+" "${MODEL_SOURCEDIR}/result_model_performance/${OUTPUT_NAME}.hellaswag" 2>/dev/null) || HSWAG_RESULT="N/A"

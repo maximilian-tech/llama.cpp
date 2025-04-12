@@ -811,3 +811,4 @@ Meta-Llama-3.1-70B-F16_from_ZFP-rate_4.50-4.50_no_imat_dim_2 -- perplexity: 2.28
 Meta-Llama-3.1-70B-F16_from_ZFP-rate_5.00-12.00_wi_imat_dim_4 -- perplexity: 2.94 seconds per pass - ETA Final estimate: PPL = 2.7574 +/- 0.00448 -- HellaSwag: Score = 84.25000000
 Meta-Llama-3.1-70B-F16_IQ1_S_wi_imat -- perplexity: 3.16 seconds per pass - ETA Final estimate: PPL = 11.2989 +/- 0.02518 -- HellaSwag: Score = 64.75000000
 Meta-Llama-3.1-70B-F16_from_ZFP-prec_09-10_wi_imat_dim_1 -- perplexity: 2.09 seconds per pass - ETA Final estimate: PPL = 2.7258 +/- 0.00442 -- HellaSwag: Score = 84.75000000
+Meta-Llama-3.1-70B-F16_from_ZFP-prec_07-07_no_imat_dim_3 -- perplexity: 35.35 seconds per pass - ETA Final estimate: PPL = 3555530.9779 +/- 6562.18595 -- HellaSwag: Score = 23.50000000

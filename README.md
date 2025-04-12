@@ -240,8 +240,51 @@ done
 9. Evaluate the data
 
 ### Steps more detailed
-Default Quant:
+5. Create Weights
+- Default Quant: [Q8 ...]
+- Als: F16 -> <Quant/ZFP> -> F16
+- ZFP
+#ToDo. Test out for 'prec' and 'tol', which maxium values can be used for upper bounds to not be too large
 
+6. Evalute Model Performance
+(Using F16 Model Types)
+PPL
+Hellaswag
+Natural Language: How much wood would  a woodchuck chuck if a woodchuck could chuck wood.
+
+7. Runtime Performance
+- Existing Quantisations
+            Q4_1 
+            Q4_K
+            Q5_1 
+            Q8_0
+            F16
+- ZFP Versions            
+            ZFP ohne Importance Matrix
+            ZFP rate 4 6 8 bit
+- Models: 3.0 & 3.1
+- 
+Cores: 24 -> 48 -> 96
+
+- Rate 8 Bit vs Q8_01
+- Rate 4 Bit
+
+Parameters: Only evalute RUNTIIME. No Imatrix --> 
+
+Natural Language: How much wood would  a woodchuck chuck if a wood chuck could chuck wood.
+
+9. Evalute
+Graphs.
+1)
+x-axis: size/bpw
+y-axis: ppl
+2)
+x-axis: size/bpw
+y-axis: hellaswag
+3)
+x-axis: PPL
+y-axis: hellaswag
+3)
 
 
 # old readme

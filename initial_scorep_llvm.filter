@@ -110,4 +110,46 @@ SCOREP_REGION_NAMES_BEGIN
     # file='ggml/src/ggml.c'
     MANGLED ggml_vec_dot_f16
 
+#SCOREP_REGION_NAMES_END
+# Initial filter file, starting point for further adaptation.
+#
+# Considerations:
+#  - check possible wildcard options
+#  - check selected functions for relevancy
+#    (w.r.t. your knowledge of the application)
+#
+# Generated with the following parameters:
+#  - A region has to use at least 1% of the estimated trace buffer.
+#  - A region has to have a time/visits value of less than 1 us.
+#  - A region that is of type USR.
+#
+# The file contains comments for each region providing additional information
+# regarding the respective region.
+# The entries are sorted by `maxbuffer`.
+# The common prefix for the files is:
+# '/home/s0872522/workspaces/horse/s0872522-llm-zfp/llama.cpp/'
+#
+# Please refer to the Score-P user guide for more options on filtering.
+#SCOREP_REGION_NAMES_BEGIN
+#  EXCLUDE
+    # type=USR max_buf=127,420,512,960 visits= 4,900,788,960, time=  853.09s (  1.3%), time/visit=    0.17us
+    # name='zfp_read_header'
+    # file='zfp/src/zfp.c'
+    MANGLED zfp_read_header
+
+    # type=USR max_buf=127,420,512,960 visits= 4,900,788,960, time=  385.69s (  0.6%), time/visit=    0.08us
+    # name='stream_read_bits'
+    # file='zfp/src/bitstream.c'
+    MANGLED stream_read_bits
+
+    # type=USR max_buf=127,420,512,960 visits= 4,900,788,960, time=  436.45s (  0.7%), time/visit=    0.09us
+    # name='stream_rseek'
+    # file='zfp/src/bitstream.c'
+    MANGLED stream_rseek
+
+    # type=USR max_buf=  6,500,793,260 visits=   250,030,510, time=   29.45s (  0.0%), time/visit=    0.12us
+    # name='zfp_field_alloc'
+    # file='zfp/src/zfp.c'
+    MANGLED zfp_field_alloc
+
 SCOREP_REGION_NAMES_END

@@ -93,13 +93,13 @@ if(GGML_ZFP_ENABLE)
     set(GGML_ZFP_DIMENSION 4 CACHE STRING  "The default dimension for ZFP Dimension (4^dimension) length")
     add_compile_definitions(-DZFPDIM=${GGML_ZFP_DIMENSION})
 
-    if(GGML_ZFP_MODE STREQUAL "ACCURACY" )
+    if(GGML_ZFP_MODE STREQUAL "acc" )
         add_compile_definitions(ZFP_USE_ACC)
         set(CMAKE_EXECUTABLE_SUFFIX ".acc")
-    elseif( GGML_ZFP_MODE STREQUAL "RATE" )
+    elseif( GGML_ZFP_MODE STREQUAL "rate" )
         add_compile_definitions(ZFP_USE_RATE)
         set(CMAKE_EXECUTABLE_SUFFIX ".rate")
-    elseif( GGML_ZFP_MODE STREQUAL "PRECISION")
+    elseif( GGML_ZFP_MODE STREQUAL "prec")
         add_compile_definitions(ZFP_USE_PREC)
         set(CMAKE_EXECUTABLE_SUFFIX ".prec")
     else()
@@ -121,6 +121,16 @@ if(GGML_ZFP_ENABLE)
     add_compile_options("-I${CMAKE_CURRENT_LIST_DIR}/uthash/src/")
     #link_libraries(uthash)
 
+endif()
+
+# Append GGML_ZFP_DIMENSION to the executable suffix
+#string(APPEND CMAKE_EXECUTABLE_SUFFIX ".scorep")
+
+
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    add_compile_options(-stdlib=libc++)
+    # Add both '-stdlib=libc++' and '-lc++abi' if needed on your system:
+    add_link_options(-stdlib=libc++)
 endif()
 
 # change the default for these ggml options
