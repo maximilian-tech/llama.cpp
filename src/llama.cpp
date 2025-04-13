@@ -87,6 +87,7 @@
 #include <thread>
 #include <type_traits>
 #include <unordered_map>
+#include <string>
 
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
@@ -18335,6 +18336,47 @@ llama_tensor_quantize_internal(enum ggml_type new_type,
     return new_size;
 }
 
+static std::string my_trim(const std::string& str) {
+    size_t start = str.find_first_not_of(" \t");
+    if (start == std::string::npos) return ""; // all spaces
+    size_t end = str.find_last_not_of(" \t");
+    return str.substr(start, end - start + 1);
+}
+
+static std::string shortenString(const std::string& s) {
+    const std::string delim = " - ";
+    size_t pos = s.find(delim);
+    if (pos == std::string::npos)
+        return s; // No delimiter found, return the original string
+
+    // Split the string into two parts using the delimiter.
+    std::string left = my_trim(s.substr(0, pos));
+    std::string right = my_trim(s.substr(pos + delim.size()));
+
+    // If the left part contains extra text (space separated), use that.
+    if (left.find(' ') != std::string::npos) {
+        std::istringstream iss(left);
+        std::string base, descriptor;
+        iss >> base;      // First token as the base
+        iss >> descriptor; // Second token, if available
+        // If the descriptor exists and its first character is a letter, append its uppercase.
+        if (!descriptor.empty() && std::isalpha(descriptor[0])) {
+            return base + "_" + static_cast<char>(std::toupper(descriptor[0]));
+        } else {
+            return base; // Otherwise just return the base
+        }
+    } else {
+        // Left part is a single token. Check the right part.
+        if (!right.empty() && std::isalpha(right[0])) {
+            return left + "_" + static_cast<char>(std::toupper(right[0]));
+        } else {
+            return left; // Do nothing if the right part doesn't start with a letter.
+        }
+    }
+}
+
+
+
 static void llama_model_quantize_internal(const std::string & fname_inp, const std::string & fname_out, const llama_model_quantize_params * params) {
     ggml_type default_type;
     llama_ftype ftype = params->ftype;
@@ -18800,14 +18842,28 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         zeros(fout, GGML_PAD(new_size, align) - new_size);
     }
     const char* used_imatrix = imatrix_data ? "true" : "false";
+    const char* used_imatrix_print = imatrix_data ? "WII" : "NOI";
 #ifdef GGML_ZFP
     
     double old_size = total_size_org/1024.0/1024.0;
     double new_size_ = global_zfp_compressed_size/1024.0/1024.0;
     double CR = old_size / new_size_;
     double bitPerWeight = 8.0*global_zfp_compressed_size / (double)nelements_global;
-    printf("\nZFP_RESULT,type,%s,dim,%i,value_min,%f,value_max,%f,imatrix,%s,n_size,%zu,original_size(MiB),%8.2f,compressed_size(MiB),%8.2f,compression_ratio,%8.2f,n_elements,%zu,bits_per_weight,%f\n",
-                global_zfp_comp_type, ZFPDIM, global_zfp_value_min,global_zfp_value_max, used_imatrix,global_index, old_size,  new_size_, CR, nelements_global, bitPerWeight);
+    char type_name[256];
+    sprintf(type_name,"ZFP%s%07.4f:%07.4f_%i+%s", global_zfp_comp_type,global_zfp_value_min,global_zfp_value_max,ZFPDIM,used_imatrix_print);
+    printf("\nZFP_RESULT,type,%s,type_raw,%s,dim,%i,value_min,%f,value_max,%f,imatrix,%s,n_size,%zu,original_size(MiB),%8.2f,compressed_size(MiB),%8.2f,compression_ratio,%8.2f,n_elements,%zu,bits_per_weight,%f\n",
+            type_name,
+            global_zfp_comp_type,
+            ZFPDIM,
+            global_zfp_value_min,
+            global_zfp_value_max,
+            used_imatrix,
+            global_index,
+            old_size,
+            new_size_,
+            CR,
+            nelements_global,
+            bitPerWeight);
     fflush(stdout);
 #else // Default
     double old_size = total_size_org/1024.0/1024.0;
@@ -18815,8 +18871,17 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     double CR = old_size / new_size_;
     double bitPerWeight = 8.0*total_size_new / (double)nelements_global;
     size_t global_index = 0;
-    printf("\nQUANT_RESULT,type,%s,dim,0,value_min,%s,value_max,<empty>,imatrix,%s,n_size,%zu,original_size(MiB),%8.2f,compressed_size(MiB),%8.2f,compression_ratio,%8.2f,n_elements,%zu,bits_per_weight,%f\n",
-                             "quantization", llama_model_ftype_name(params->ftype).c_str(), used_imatrix, global_index, old_size,  total_size_new/1024.0/1024.0  , CR, nelements_global, bitPerWeight);
+    
+    printf("\nQUANT_RESULT,type,%s,type_raw,%s,dim,N/A,value_min,N/A,value_max,N/A,imatrix,%s,n_size,%zu,original_size(MiB),%8.2f,compressed_size(MiB),%8.2f,compression_ratio,%8.2f,n_elements,%zu,bits_per_weight,%f\n",
+            (shortenString(llama_model_ftype_name(params->ftype))+ "+" + used_imatrix_print).c_str(),
+            llama_model_ftype_name(params->ftype).c_str(),
+            used_imatrix,
+            global_index,
+            old_size,
+            total_size_new/1024.0/1024.0,
+            CR,
+            nelements_global,
+            bitPerWeight);
     fflush(stdout);
 
 #endif

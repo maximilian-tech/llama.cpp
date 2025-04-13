@@ -283,7 +283,7 @@ static inline float safe_quant_weight(const float *quant_weight) {
             tol = -1.0*(double)qw * (tol_max - tol_min) + tol_max;                \
         }                                                                    \
                                                                              \
-        strncpy(global_zfp_comp_type, "accuracy", sizeof(global_zfp_comp_type) - 1); \
+        strncpy(global_zfp_comp_type, "accu", sizeof(global_zfp_comp_type) - 1); \
         global_zfp_value_min = tol_min;                                      \
         global_zfp_value_max = tol_max;                                      \
                                                                              \
@@ -317,7 +317,7 @@ static inline float safe_quant_weight(const float *quant_weight) {
             precision = (unsigned int)(qw * (prec_max - prec_min) + prec_min /*add 0.5 to allow for rounding */+0.5);  \
         }                                                                    \
                                                                              \
-        strncpy(global_zfp_comp_type, "precision", sizeof(global_zfp_comp_type) - 1); \
+        strncpy(global_zfp_comp_type, "prec", sizeof(global_zfp_comp_type) - 1); \
         global_zfp_value_min = prec_min;                                     \
         global_zfp_value_max = prec_max;                                     \
                                                                              \
