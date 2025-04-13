@@ -253,7 +253,7 @@ static inline float safe_quant_weight(const float *quant_weight) {
                                     rate,                                    \
                                     zfp_field_type(field),                   \
                                     zfp_field_dimensionality(field),         \
-                                    zfp_false);                              \
+                                    zfp_false );                             \
         }                                                                    \
     } while (0)
 

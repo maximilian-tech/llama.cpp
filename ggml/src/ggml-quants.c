@@ -3125,7 +3125,7 @@ double global_zfp_value_max = 0.;
 size_t global_index = 0;
 
 
-
+#if 0
 static void
 quantize_zfp_impl2( const float* restrict src,
                    void* restrict        dst,
@@ -3191,6 +3191,7 @@ quantize_zfp_impl2( const float* restrict src,
 // ht_set(g_table,"1","32");
 // char* val = (char*)ht_get(g_table, "1");
 // printf("Value is :'%s'\n",val);
+#endif
 
 static void
 quantize_zfp_impl( const float* restrict src,
@@ -3235,14 +3236,14 @@ quantize_zfp_impl( const float* restrict src,
             assert (false && "Exceeded max. available space");
         }
         #pragma omp atomic
-        global_zfp_compressed_size += zfp_compressed_size_tmp/8 + header_size/8;
+        global_zfp_compressed_size += zfp_compressed_size_tmp/8 ; // + header_size/8;
     }
     stream_close(stream);
     zfp_field_free(field);
     zfp_stream_close(zfp);
 }
 
-
+#if 0
 /**
  * This function decompresses 'src' of size 'n' into 'dst'
  */
@@ -3285,6 +3286,7 @@ dequantize_zfp_impl2( const void * restrict src,
     zfp_stream_close(zfp);
 //    stream_close(stream);
 }
+#endif
 
 static void
 dequantize_zfp_impl( const void * restrict src,
