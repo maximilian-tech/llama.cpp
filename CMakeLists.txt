@@ -118,9 +118,10 @@ if(GGML_ZFP_ENABLE)
 
 endif()
 
-# Append GGML_ZFP_DIMENSION to the executable suffix
-#string(APPEND CMAKE_EXECUTABLE_SUFFIX ".scorep")
-
+option(GGML_SCOREP_SUFFIX "Build EXECUTABLEs with .scorep suffix" OFF)
+if(GGML_SCOREP_SUFFIX)
+    string(APPEND CMAKE_EXECUTABLE_SUFFIX ".scorep")
+endif()
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     add_compile_options(-stdlib=libc++)
