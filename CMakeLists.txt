@@ -123,11 +123,11 @@ if(GGML_SCOREP_SUFFIX)
     string(APPEND CMAKE_EXECUTABLE_SUFFIX ".scorep")
 endif()
 
-if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    add_compile_options(-stdlib=libc++)
+#§if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    #add_compile_options(-stdlib=libc++)
     # Add both '-stdlib=libc++' and '-lc++abi' if needed on your system:
-    add_link_options(-stdlib=libc++)
-endif()
+    #add_link_options(-stdlib=libc++)
+#endif()
 
 # change the default for these ggml options
 if (NOT DEFINED GGML_LLAMAFILE)
